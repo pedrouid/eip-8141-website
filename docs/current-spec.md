@@ -33,13 +33,15 @@ The execution model defines what is *possible*; the mempool model defines what i
 ## Transaction Structure
 
 ```
-[chain_id, nonce, sender, frames, max_priority_fee_per_gas, max_fee_per_gas, max_fee_per_blob_gas, blob_versioned_hashes]
+[chain_id, nonce, sender, frames, signatures, max_priority_fee_per_gas, max_fee_per_gas, max_fee_per_blob_gas, blob_versioned_hashes]
 
 frames = [[mode, flags, target, gas_limit, value, data], ...]
+signatures = [[algorithm, signer, message, signature], ...]
 ```
 
 - `sender`: the 20-byte address of the account originating the transaction
 - Each frame has a `mode` (lower 8 bits only), a `flags` field (approval scope + atomic batch), a `target` address (or null for sender), a gas limit, a `value` field (ETH to transfer in the top-level frame call, non-zero only in `SENDER` frames), and arbitrary data
+- `signatures` is a list of signature objects on the outer transaction, verified before any frame executes; during execution, signer identity and signature validity are already established (PR #11481, merged May 22). The default code reads from this list rather than `frame.data`
 - Up to 64 frames per transaction
 
 ## Frame Modes
@@ -89,11 +91,11 @@ When `frame.target` has no code, the protocol applies built-in "default code" be
 **VERIFY mode:**
 1. If `frame.target != tx.sender`, revert
 2. Read the approval scope from the flags: `scope = frame.flags & 3`. If `scope == 0`, revert
-3. Read first byte of `frame.data` as `signature_type`
-4. If `0x0` (SECP256K1): verify ECDSA signature `(v, r, s)` against `compute_sig_hash(tx)`, enforce low-`s`, reject failed `ecrecover`
+3. Locate the entry in `tx.signatures` whose signer matches `tx.sender` (the default code loops the outer `signatures` list to find the relevant entry, since contracts cannot hardcode an index)
+4. If `algorithm == 0x0` (SECP256K1): verify ECDSA signature against `compute_sig_hash(tx)`, enforce low-`s`, reject failed `ecrecover`
 5. Call `APPROVE(scope)`
 
-PR #11621 (merged May 11) removed the P256 (`0x1`) branch from the protocol-shipped default code. Hardware-wallet and passkey support are no longer covered by default; accounts that need P256 must ship verification code themselves or wait for a follow-up extension EIP. The PR description did not give a rationale.
+PR #11481 (merged May 22) moved per-tx signatures out of `frame.data` and into a dedicated outer `signatures` list, so the default code now reads from the outer list. The signature-index discovery weakness derekchiang flagged on Apr 9 (a contract cannot hardcode its index because the list may be reordered) lands as a known limitation; the default code loops through entries to find a matching signer. PR #11621 (merged May 11) removed the P256 (`0x1`) branch from the protocol-shipped default code. Hardware-wallet and passkey support are no longer covered by default; accounts that need P256 must ship verification code themselves or wait for a follow-up extension EIP.
 
 **SENDER and DEFAULT modes:** PR #11621 (merged May 11) changed default code so that `SENDER` and `DEFAULT` frames no longer revert. The previous behavior (revert unconditionally on both modes, plus an RLP-call-batch decoder removed by PR #11577 on Apr 29) blocked simple native ETH transfers to a fresh EOA via a frame transaction. After the merge, a `SENDER` or `DEFAULT` frame whose `resolved_target` has no code completes the value transfer and returns with empty data.
 
@@ -273,7 +275,7 @@ The sponsor pays ETH gas; frame 2 repays the sponsor in ERC-20 tokens.
 | EIP-7997 | Canonical deterministic factory predeploy; recommended for cross-chain-stable factory addresses but no longer a hard dependency after PR #11567 (merged Apr 30) |
 | EIP-7392 | Signature registry; interoperability PR #11455 was closed without merge on Apr 23 |
 | EIP-8250 | Keyed-nonces sibling EIP (PR #11598 merged May 11); layers `(nonce_key, nonce_seq)` replay protection on top of EIP-8141 via a `NONCE_MANAGER` system contract. First EIP whose `requires` header includes EIP-8141 |
-| EIP-8266 (pending) | Second compose-by-requires sibling EIP (PR #11692, opened May 19 by nerolation and lightclient; number assigned May 20). Sentinel-mode (`tx.nonce == 2**64 - 1`) plus a `NONCE_RING` system contract and fixed-capacity ring buffer for short-lived replay protection; deadline enforced by reusing the `EXPIRY_VERIFIER` frame. Composes with EIP-8250 |
+| EIP-8266 | Expiring-nonces sibling EIP (PR #11692 merged May 22, co-authored by nerolation and lightclient); second EIP in the compose-by-requires AA stack, with `requires` including both EIP-8141 and EIP-8250. Sentinel-mode (`tx.nonce == 2**64 - 1`) plus a `NONCE_RING` system contract; complements PR #11662's per-tx `EXPIRY_VERIFIER` frame by scoping nonces themselves to time windows |
 
 ## Key Takeaway
 

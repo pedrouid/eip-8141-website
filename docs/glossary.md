@@ -30,7 +30,7 @@ A reference for the jargon that appears across this site. Entries are grouped by
 
 **Canonical signature hash (sighash)** — `keccak(bytes([FRAME_TX_TYPE]) + rlp(tx_copy))` where `tx_copy` has VERIFY-frame `data` fields replaced with empty bytes. VERIFY data is elided so signatures can cover the rest of the transaction without covering themselves. The type-byte prefix follows the EIP-2718 convention for cross-type replay protection (PR #11544).
 
-**Default code** — Protocol-level logic that runs when a frame targets an account with no deployed code and no EIP-7702 delegation. Provides VERIFY (ECDSA + P256 signature verification with low-s enforcement), SENDER (RLP-decoded multi-call with native ETH value transfer), and DEFAULT (reverts). Makes EOAs first-class frame-transaction users. See [EOA Support](/eoa-support).
+**Default code** — Protocol-level logic that runs when a frame targets an account with no deployed code and no EIP-7702 delegation. Provides VERIFY (secp256k1 ECDSA signature verification with low-s enforcement, reading from the outer `signatures` list per PR #11481), SENDER (top-level value transfer, returns with empty data after PR #11621), and DEFAULT (returns with empty data after PR #11621). Makes EOAs first-class frame-transaction users. See [EOA Support](/eoa-support).
 
 **ENTRY_POINT** — A protocol-defined distinguished caller address (`0xaa`) used as `CALLER` in DEFAULT and VERIFY frames. Not a deployed contract or precompile; contracts must not assume anything about its code, balance, or caller type beyond address equality. `CALLVALUE = 0` when the caller is `ENTRY_POINT`.
 
@@ -136,7 +136,7 @@ A reference for the jargon that appears across this site. Entries are grouped by
 
 **secp256k1** — The Koblitz curve used by Ethereum's EOA signatures. Paired with ECDSA; not quantum-safe. Default code accepts it as the primary signature scheme.
 
-**Signature aggregation** — Combining many individual signatures into a single succinct validity proof that the protocol checks once. Strategically important for PQ signatures (which are large); the VERIFY-frame architecture deliberately preserves the path forward. See [PR #11481](https://github.com/ethereum/EIPs/pull/11481) for the signatures-list proposal.
+**Signature aggregation** — Combining many individual signatures into a single succinct validity proof that the protocol checks once. Strategically important for PQ signatures (which are large); the VERIFY-frame architecture deliberately preserves the path forward. The outer `signatures` list ([PR #11481](https://github.com/ethereum/EIPs/pull/11481), merged May 22) adds the schema-level hook: a future block-level aggregated witness can elide individual per-tx signatures while preserving the commitments.
 
 **SPHINCS+** — A hash-based post-quantum signature scheme (NIST FIPS 205). Larger signatures than Dilithium/Falcon; referenced as one of the PQ candidates in the roadmap.
 

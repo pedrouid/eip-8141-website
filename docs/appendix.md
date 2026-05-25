@@ -45,12 +45,13 @@
 | May 11 | [#11621](https://github.com/ethereum/EIPs/pull/11621) | lightclient | Frames cleanup (spec coherence refactor: skipped-batch receipt status, FRAMEPARAM operand order, P256 dropped from default code, default code accepts SENDER/DEFAULT, adds 7623+7702 to requires) |
 | May 12 | [#11652](https://github.com/ethereum/EIPs/pull/11652) | derekchiang | Extend atomic batching from `SENDER`-only to any frame mode; restrictive mempool tier separately forbids the flag inside the validation prefix |
 | May 14 | [#11662](https://github.com/ethereum/EIPs/pull/11662) | nerolation | Add EXPIRY_VERIFIER frame: canonical contract at `address(0x8141)` whose runtime enforces an 8-byte unix-seconds deadline; mempool drops expired txs; `TIMESTAMP` carve-out for canonical runtime |
+| May 22 | [#11481](https://github.com/ethereum/EIPs/pull/11481) | lightclient | Add signatures list to outer tx (opened Apr 2); new `signatures` outer-envelope field carrying signature + algorithm + signer metadata, verified before frame execution; default code reads from this list. Forward-compat hook for PQ signature aggregation |
+| May 22 | [#11692](https://github.com/ethereum/EIPs/pull/11692) | nerolation | Add EIP-8266: Expiring Nonces for Frame Transactions (sibling EIP whose `requires` includes EIP-8141 and EIP-8250). Second EIP in the compose-by-requires AA stack |
 
 ### Open
 
 | Date | PR | Author | Description |
 |---|---|---|---|
-| Apr 2 | [#11481](https://github.com/ethereum/EIPs/pull/11481) | lightclient | Add signatures list to outer tx (PQ aggregation) |
 | Apr 2 | [#11482](https://github.com/ethereum/EIPs/pull/11482) | derekchiang | Allow precompiles for VERIFY frames (all reviewers approved) |
 | Apr 22 | [#11555](https://github.com/ethereum/EIPs/pull/11555) | derekchiang | Add support for guarantors (payer covers gas even if sender validation fails) |
 | Apr 29 | [#11580](https://github.com/ethereum/EIPs/pull/11580) | lightclient | Allow payer to approve before sender (draft; alternative to #11555 guarantors) |
@@ -109,17 +110,19 @@
 | Franco Victorio | @fvictorio | Raised question about validation-frame execution ordering vs non-frame txs |
 | dionysuzx | @dionysuzx | Hegotá meta-EIP maintainer, submitted PR #11537 moving EIP-8141 to CFI (merged Apr 30) |
 | Nero_eth | Nero_eth | ethresear.ch analyst; "Three Gates to Privacy" post framing mempool/FOCIL/VOPS constraints on privacy-pool flows through frame transactions |
-| Toni Wahrstätter | @nerolation | Author of PR #11584 (2D nonces, closed), co-author of EIP-8250 Keyed Nonces (PR #11598, merged May 11), author of PR #11662 (EXPIRY_VERIFIER frame, merged May 14), and co-author with lightclient of PR #11692 (EIP-8266 Expiring Nonces sibling EIP, opened May 19, number assigned May 20). Added to EIP-8141's `author` header in PR #11662 |
+| Toni Wahrstätter | @nerolation | Author of PR #11584 (2D nonces, closed), co-author of EIP-8250 Keyed Nonces (PR #11598, merged May 11), author of PR #11662 (EXPIRY_VERIFIER frame, merged May 14), and co-author with lightclient of EIP-8266 Expiring Nonces (PR #11692, merged May 22). Added to EIP-8141's `author` header in PR #11662 |
 | Thomas Thiery | @soispoke | Lead author of EIP-8250 Keyed Nonces for Frame Transactions (PR #11598, merged May 11) |
 | Pedro Gomes | @pedrouid | Author of PR #11681 (opened May 16), the successor to closed PR #11643 (Extended Feature Set, May 11 – May 18): proposes bundling guarantors, keyed nonces, and signer binding into EIP-8141 itself via a `signer` envelope field and an `AUTH_MANAGER` system contract, dropping the envelope-expiry component now that PR #11662 (EXPIRY_VERIFIER) ships protocol-level expiry as a verifier-frame contract |
 | German Abal | @ariutokintumi | Co-founder/architect of EVVM (contract-native AA framework); contributed a production-perspective comparison on the magicians thread (post #148, May 7) on per-environment policy, async execution, batch granularity, and reservation primitives |
 | Sam Wilson | @SamWilsn | EIP editor; spec-coherence review (post #149, May 8) on naming, empty-target representation, opcode-budget, and `FRAMEDATACOPY` revert semantics |
+| trebor | @trebor | Privacy-focused paymaster researcher (Kohaku); raised the Example 3 (ERC-20 paymaster) feasibility question in posts #156-157 (May 21), arguing the restrictive-tier rules block non-canonical ERC-20 paymasters from confirming token balances |
 
 ## External Resources
 
 - [Live Demo](https://demo.eip-8141.ethrex.xyz/)
 - [EIP-8141 Latest Spec](https://eips.ethereum.org/EIPS/eip-8141)
 - [Ethereum Magicians Discussion](https://ethereum-magicians.org/t/frame-transaction/27617)
+- [EIP-8266: Expiring Nonces for Frame Transactions](https://ethereum-magicians.org/t/eip-8266-expiring-nonces-for-frame-transactions/28575)
 - [PoC Implementation by sm-stack](https://github.com/sm-stack/eip8141-poc)
 - [PoC Writeup](https://hackmd.io/@TB5b8ghoQyChOtUKB0RsOg/B1PhyMK_be)
 - [BundleBear EIP-7702 Metrics](https://www.bundlebear.com/eip7702-overview/ethereum)

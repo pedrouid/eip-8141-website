@@ -25,12 +25,12 @@ Every EOA gets the following behavior without opt-in, deployment, or signed auth
 
 1. Require `frame.target == tx.sender` unless the approval scope is payer-only (`0x1`). Any EOA can serve as a paymaster.
 2. Read approval scope from the flags field: `scope = frame.flags & 3`. If `scope == 0`, revert.
-3. Read first byte of `frame.data` as `signature_type`:
-   - `0x0` (secp256k1): parse `(v, r, s)`, enforce low-`s`, reject failed `ecrecover`, require `frame.target == ecrecover(sig_hash, v, r, s)`.
+3. Locate the entry in `tx.signatures` whose signer matches `frame.target` (the default code loops the outer list since contracts cannot hardcode an index). Read its `algorithm`:
+   - `0x0` (secp256k1): parse the signature, enforce low-`s`, reject failed `ecrecover`, require `frame.target == ecrecover(sig_hash, sig)`.
    - Anything else: revert.
 4. Call `APPROVE(scope)`.
 
-PR #11621 (merged May 11) removed the P256 (`0x1`) branch from default code. Hardware wallets and passkey-based accounts that previously relied on default-code P256 verification now have to ship that logic themselves (via deployed code or a future extension EIP). secp256k1 ECDSA is the only signature scheme that ships in the protocol-level default code.
+PR #11481 (merged May 22) moved per-tx signatures out of `frame.data` and into a dedicated outer `signatures` list. The default code now reads from this list rather than from `frame.data`; the design accommodates a future block-level aggregated witness that could replace the per-tx list entirely. The signature-index discovery ergonomic (a contract cannot hardcode its index because the list may be reordered) lands as a known limitation: the default code does a linear scan. PR #11621 (merged May 11) removed the P256 (`0x1`) branch from default code. Hardware wallets and passkey-based accounts that previously relied on default-code P256 verification now have to ship that logic themselves (via deployed code or a future extension EIP). secp256k1 ECDSA is the only signature scheme that ships in the protocol-level default code.
 
 ### SENDER mode
 

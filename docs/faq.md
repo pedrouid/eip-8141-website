@@ -86,11 +86,11 @@ Yes. Multiple SENDER frames execute sequentially, and consecutive frames with th
 
 **4.5. Do I need a smart contract wallet to use this?**
 
-No. The protocol has built-in default behavior for codeless accounts - ECDSA and P256 signature verification, and multi-call decoding in SENDER frames. [Details →](/current-spec#eoa-default-code)
+No. The protocol has built-in default behavior for codeless accounts: secp256k1 ECDSA signature verification, plus native ETH transfer in SENDER frames via `frame.value`. [Details →](/current-spec#eoa-default-code)
 
 **4.6. Is this compatible with passkeys / biometrics?**
 
-Yes. The EOA default code supports P256 signatures natively, which covers Apple/Google passkeys and WebAuthn without any contract deployment. Tradeoff flagged by frangio and shemnon during review: P256 accounts do not support key rotation, so an account set up with a passkey cannot later migrate to a PQ-secure scheme without additional EIPs.
+Not natively, after PR #11621 (merged May 11) removed the P256 branch from default code. Passkey and WebAuthn support now requires deployed account code or a future extension EIP; the previous tradeoff (P256 accounts don't support key rotation, flagged by frangio and shemnon) is part of why the protocol-shipped default code narrowed to secp256k1 only.
 
 **4.7. How do I send ETH to someone with a frame transaction?**
 
@@ -163,6 +163,10 @@ Potentially. Mempool health is censorship resistance - if minimal nodes can't va
 **7.5. Can a frame transaction expire?**
 
 Yes. PR #11662 (merged May 14) added an expiry-verifier frame: a `VERIFY` frame targeting `address(0x8141)` whose `frame.data` is an 8-byte unix-seconds deadline. The canonical runtime reverts if the deadline has passed, and the public mempool drops the transaction as soon as the deadline is in the past. At most one such frame per transaction. [Spec details →](/current-spec#expiry-verifier-frame)
+
+**7.6. What's the difference between EXPIRY_VERIFIER and EIP-8266 expiring nonces?**
+
+`EXPIRY_VERIFIER` (PR #11662, merged May 14) expires a single transaction: past the deadline, that specific transaction becomes invalid. EIP-8266 (PR #11692, merged May 22) expires a nonce slot: past the deadline, the keyed-nonce sequence as a whole ages out. They are complementary primitives.
 
 ---
 

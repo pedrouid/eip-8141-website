@@ -4,13 +4,14 @@
 
 ## Structural Comparison
 
-| Aspect | Original (Jan 29) | Latest (May 14) |
+| Aspect | Original (Jan 29) | Latest (May 22) |
 |---|---|---|
 | **Opcodes** | `APPROVE`, `TXPARAMLOAD`, `TXPARAMSIZE`, `TXPARAMCOPY` (4) | `APPROVE`, `TXPARAM`, `FRAMEDATALOAD`, `FRAMEDATACOPY`, `FRAMEPARAM` (5) |
 | **APPROVE mechanism** | Return codes 0-4 at top-level frame | Transaction-scoped with scope operand (0x1, 0x2, 0x3), callable at any depth, double-approval prevention |
 | **APPROVE scope** | 0x0 (execution), 0x1 (payment), 0x2 (both) | 0x1 (payment), 0x2 (execution), 0x3 (both) |
 | **APPROVE restriction** | Must be top-level frame | `ADDRESS == frame.target` only |
 | **Frame structure** | `[mode, target, gas_limit, data]` | `[mode, flags, target, gas_limit, value, data]` (mode/flags split, per-frame `value`) |
+| **Outer envelope signatures** | No outer signatures field; all signatures carried inside `frame.data` of VERIFY frames | `signatures` outer-envelope list carrying signature + algorithm + signer metadata, verified before frame execution. Default code reads from this list. Forward-compat hook for PQ signature aggregation (PR #11481, merged May 22) |
 | **Mode field** | Just mode value (0, 1, 2) | Pure mode (0, 1, 2) with separate `flags` field |
 | **Flags field** | N/A | Bits 0-1 = approval scope constraint; bit 2 = atomic batch flag |
 | **Frame modes** | DEFAULT, VERIFY, SENDER | Same three modes plus an expiry-verifier shape (`VERIFY` with `target == EXPIRY_VERIFIER`) admitted by PR #11662 (merged May 14) |
@@ -33,7 +34,7 @@
 | **Deterministic deployer** | Not specified | EIP-7997 is the canonical-but-optional factory; any stateless factory qualifies under the deploy-frame trace rules (PR #11567, merged Apr 30) |
 | **Deploy-frame mempool rule** | N/A | Trace-rule policy: write carve-out for `CREATE`/`CREATE2`/`SETDELEGATE` installing code at `tx.sender` and `SSTORE`s on `tx.sender`'s storage; any contract may be `frame.target` (PR #11567) |
 | **Fork inclusion status** | N/A | CFI in Hegotá fork meta EIP-8081 (PR #11537, merged Apr 30) |
-| **Sibling EIPs** | N/A | EIP-8250 Keyed Nonces (PR #11598 merged May 11) is the first EIP whose `requires` includes EIP-8141 |
+| **Sibling EIPs** | N/A | EIP-8250 Keyed Nonces (PR #11598 merged May 11) is the first EIP whose `requires` includes EIP-8141; EIP-8266 Expiring Nonces (PR #11692 merged May 22) is the second, with `requires` including both EIP-8141 and EIP-8250 |
 
 ## Key Philosophical Shifts
 
@@ -88,11 +89,10 @@ The original spec deliberately had no `value` field in frames, on the principle 
 
 ## Active Proposals That May Change the Comparison
 
-As of May 18, 2026, several open PRs propose changes that would extend this comparison table:
+As of May 25, 2026, several open PRs propose changes that would extend this comparison table:
 
 | Proposal | PR | Impact |
 |---|---|---|
-| **Signatures list in outer tx** | [#11481](https://github.com/ethereum/EIPs/pull/11481) | Would add a `signatures` field to the transaction format, a new top-level field for PQ aggregation forward-compatibility |
 | **Precompile-based VERIFY** | [#11482](https://github.com/ethereum/EIPs/pull/11482) | Would allow VERIFY frames to target signature precompiles directly, changing the verification model (all reviewers approved) |
 | **Guarantors** | [#11555](https://github.com/ethereum/EIPs/pull/11555) | Would introduce a "guarantor" payer that pays even if sender validation fails, letting mempool nodes skip sender simulation and admit shared-state-reading VERIFY frames |
 | **Payer approves before sender** | [#11580](https://github.com/ethereum/EIPs/pull/11580) | Alternative to #11555: relaxes the ordering rule so a payer can approve before the sender, letting a payer commit to gas without simulating sender validation. Briefly auto-merged as #11575 on Apr 28 and reverted by #11579 on Apr 29; reopened as a draft |

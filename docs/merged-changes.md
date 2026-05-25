@@ -393,22 +393,46 @@ All reviewers approved by Apr 18; auto-merged on Apr 22 with no further debate.
 
 ---
 
-## Active/Open PRs
+## Signatures List Merged and EIP-8266 Expiring Nonces Sibling — May 22, 2026
 
-*As of May 21, 2026.* These PRs represent active design proposals that may change the spec in the near future.
+*Why this mattered: two structurally significant merges landed within sixteen hours of each other on May 22. PR #11481 (open since Apr 2) finally lands the `signatures` outer-transaction field, the most structural change to the transaction format since per-frame `value` (PR #11534) and the load-bearing forward-compat hook for PQ signature aggregation. PR #11692 lands as EIP-8266 (Expiring Nonces for Frame Transactions, co-authored by nerolation and lightclient), a second sibling EIP whose `requires` header includes EIP-8141, expanding the compose-by-requires AA stack first established by EIP-8250.*
 
-### PR #11481: Add signatures list to outer tx (open since Apr 2)
+### PR #11481: Add signatures list to outer tx
 
-**Author**: lightclient
+**Author**: lightclient | **Merged**: May 22 (opened Apr 2)
 
-- **Why**: Forward-compatibility with PQ signature aggregation. PQ signatures are large, and aggregating them will be critical.
-- **Proposed change**: Add a new `signatures` field to the outer transaction object, containing signature objects with algorithm metadata, message, and signer. Signatures are verified before frame execution.
-- **Significance**: This is the most structurally significant open proposal; it would change the transaction format itself. In the future, block-level aggregated witnesses could elide individual signatures.
-- **All reviewers approved**, but derekchiang raised a practical concern (Apr 9): smart contracts leveraging outer signatures don't know which index their signature is at. The contract can't hardcode an index because the transaction may have any number of signatures in arbitrary order, so the default code has to loop through the entire list to find the relevant entry. This is an ergonomic and gas-efficiency weakness that needs addressing.
+- **Why**: Forward-compatibility with PQ signature aggregation. PQ signatures are large (Falcon: ~666 bytes, Dilithium: ~2,420 bytes), and aggregating them will be critical as users migrate. A pre-execution `signatures` field lets future block-level aggregated witnesses elide individual signatures from block serialization while preserving the per-tx signature commitments.
+- **Spec changes** (+199/-61, the largest spec-text addition since PR #11521 Apr 14 broad tightening):
+  - **New outer field `signatures`**: a list of signature objects on the outer transaction. Each entry carries the signature itself plus metadata (algorithm, message, signer). Verified before any frame executes; during execution, signature validity and signer identity are already established and the contract only needs to check authority.
+  - **Default code updated**: secp256k1 VERIFY now reads from the outer `signatures` list rather than `frame.data`. The default code loops through the list to find the entry whose signer matches `tx.sender` (the ergonomic weakness derekchiang flagged on Apr 9 was not separately addressed before merge).
+  - **Forward-compat hook**: the design accommodates a future block-level aggregated witness that could replace the per-tx signature list entirely; individual signatures would be elidable from the on-wire form.
+- **Key review discussion**: derekchiang's Apr 9 comment on the signature-index discovery problem was the only substantive review thread on the PR. Three subsequent forum comments (0xrcinus, morph-dev, 0xrcinus again, Apr 15-16) debated a default-code optimization that would skip the per-frame VERIFY when `tx.sender` was found in the outer list with a matching sighash; morph-dev rejected the shortcut citing key-rotation cases where the sender's signing key is not the smart-wallet's validation key. jochem-brouwer left a final editorial review on May 22 ("Some small questions and comments!") and the bot fired the auto-merge minutes later. The index-discovery ergonomic question lands as a known limitation rather than a blocker.
+- **Significance**: largest spec-text addition since PR #11521 (Apr 14). The signatures field is the first protocol-level structure aimed specifically at PQ aggregation forward-compat (rather than at per-tx flexibility), and the first outer-envelope field added since the original Jan 29 design. The Apr 9 ergonomic concern (index discovery in default code) remains unresolved and is the leading candidate for a follow-up PR.
 
 From lightclient's PR description:
 
 > Any important goal of 8141 is to be forward compatible with signature aggregation techniques, especially with respect to PQ signatures. As those signatures are quite large, aggregating them may become very important as many users begin migrating.
+
+### PR #11692: Add EIP-8266 — Expiring Nonces for Frame Transactions
+
+**Authors**: nerolation (Toni Wahrstätter), lightclient | **Merged**: May 22 (opened May 19)
+
+- **Why**: PR #11662 (May 14) shipped protocol-level transaction expiry as a verifier-frame contract (`EXPIRY_VERIFIER` at `address(0x8141)`). EIP-8266 introduces a complementary primitive: a short-lived replay-protection mode for senders that want to admit multiple pending transactions within a deadline window without growing per-tx state unboundedly. For short-lived intents (atomic swaps, time-boxed sponsorships) the only replay risk worth defending against is rebroadcast inside the deadline window; expiring nonces trade per-tx state growth for a fixed-capacity ring buffer.
+- **Spec changes**: New EIP at `EIPS/eip-8266.md` (+162/-0 lines). `requires` header includes EIP-8141 and EIP-8250, making EIP-8266 the second EIP in the compose-by-requires AA stack established by EIP-8250 on May 11. Mechanism in three parts:
+  - **Sentinel-mode selection**: a transaction is in expiring-nonce mode when `tx.nonce == 2**64 - 1`. Reusing the existing `nonce` field keeps the payload schema unchanged and lets the canonical signature hash continue to commit to the mode marker.
+  - **Ring-buffer state**: a `NONCE_RING` system contract (runtime `0x60006000fd`, revert-only) holds a fixed `RING_CAPACITY = 2**18` slot ring. Consumption happens atomically on the unique payment-approving `APPROVE`. A flat `EXPIRING_NONCE_GAS = 13000` covers the read/write set; the zero-to-nonzero `SSTORE_SET` premium is intentionally omitted because the ring's leaf count is invariant in steady state (paired set+clear keeps trie leaves invariant per consumption).
+  - **Deadline enforcement**: the deadline is enforced by reusing PR #11662's `EXPIRY_VERIFIER` frame (8-byte big-endian unix-seconds, capped at `MAX_EXPIRY_SECS = 60`). The sizing invariant `MAX_EXPIRY_SECS × peak_tps ≤ RING_CAPACITY` keeps the ring from evicting a live deadline (~4369 sustained TPS headroom).
+- **Composition with EIP-8250**: explicitly non-normative. If both ship, the sentinel collapses into EIP-8250's keyed-nonce framing as a reserved `nonce_key == 2**256 - 1`; `NONCE_RING` storage moves under a distinct prefix inside `NONCE_MANAGER`. Mempool nodes MAY admit multiple pending expiring-nonce transactions per sender, reserving `TXPARAM(0x06)` against the payer's balance for each, breaking with EIP-8141's one-pending-per-sender guidance.
+- **Key review discussion**: soispoke (EIP-8250 lead author) left a substantive five-comment inline review on May 19 within hours of submission. Two correctness bugs were caught and acknowledged by nerolation: (1) a same-block replay window at the `d == block.timestamp` boundary, since the strict-inequality check `stored < now` permits a second inclusion in the same block; soispoke's fix is `stored == 0 || stored < now` for stateful validity plus `oldDeadline >= now` for eviction. (2) Pricing concern that the 13000 charge underprices fresh `slot_seen(h)` writes; nerolation reframed the justification to "paired set+clear keeps trie leaves invariant" rather than "overwriting existing slots." soispoke also walked back the privacy framing: the replay key is `compute_sig_hash(tx)`, which only prevents same-hash replay and not nullifier reuse via envelope perturbation. nerolation acknowledged and retracted the privacy use case. abcoathup assigned EIP number 8266 on May 20 with the standard editor note. jochem-brouwer approved on May 22 ("Editorial: LGTM! I'll leave some review comments on EthMagicians later") and auto-merge fired. After the merge, kdenhartog raised a concern (May 24) about ECDSA nonce-reuse attacks and asked for security-considerations text; he edited his own comment shortly after to retract, noting it did not apply to EIP-8141's replay-protection model.
+- **Significance**: second sibling EIP in the EIP-8141 compose-by-requires stack (after EIP-8250). The architectural pattern is now consolidated: EIP-8141 owns the protocol primitive (transaction shape, mempool policy, default code); sibling EIPs layer specific replay-protection and expiry policies on top through `requires`. This is the opposite of the absorb-into-base packaging carried by PR #11681. With #11481 also merged the same day, the absorb-into-base proposal now competes against a two-sibling baseline rather than one.
+
+The EthMagicians thread ([topic 28575](https://ethereum-magicians.org/t/eip-8266-expiring-nonces-for-frame-transactions/28575)) was created May 20 with the initial announcement (1 post so far). Discussion of EIP-8266 design questions now happens on this thread rather than the original 27617 Frame Transaction thread.
+
+---
+
+## Active/Open PRs
+
+*As of May 25, 2026.* These PRs represent active design proposals that may change the spec in the near future.
 
 ### PR #11482: Allow using precompiles for VERIFY frames (open since Apr 2)
 
@@ -465,22 +489,6 @@ From lightclient's PR description (carried over from #11575):
 From pedrouid's PR description:
 
 > Guarantors: a payer primitive that admits a transaction to the public mempool even when the sender's `VERIFY` frame is unsafe to simulate. Adopts PR #11555 verbatim. Keyed Nonces: independent replay-protection sequences per `(sender, signer)`. Mirrors EIP-8250 semantics. Diverges only in shape: one `uint64 signer` envelope field instead of `(nonce_key, nonce_seq)`. Signer Binding: tx-scoped `verified_signers` table populated by non-secp256k1 `VERIFY` frames.
-
-### PR #11692: Add EIP-8266 — Expiring Nonces for Frame Transactions (open since May 19)
-
-**Authors**: nerolation (Toni Wahrstätter), lightclient
-
-- **Why**: A linear sender nonce forces ordering, blocks multiple pending transactions, and ties inclusion order to nonce order. For short-lived intents (atomic swaps, time-boxed sponsorships) the only replay risk worth defending against is rebroadcast inside the deadline window. Expiring nonces replace per-tx state growth with a fixed-capacity ring buffer.
-- **Proposed change**: New sibling EIP (`EIPS/eip-8266.md`, +162 lines) layering an "expiring-nonce" mode on EIP-8141. Triggered by the sentinel `tx.nonce == 2**64 - 1`. A `NONCE_RING` system contract (runtime `0x60006000fd`) holds a fixed `RING_CAPACITY = 2**18` slot ring; consumption happens atomically on the unique payment-approving `APPROVE`. The deadline is enforced by reusing PR #11662's `EXPIRY_VERIFIER` frame (8-byte big-endian unix-seconds, capped at `MAX_EXPIRY_SECS = 60`). A flat `EXPIRING_NONCE_GAS = 13000` charge covers the ring's read/write set; the zero-to-nonzero `SSTORE_SET` premium is intentionally omitted because the ring's leaf count is invariant in steady state (paired set+clear keeps trie leaves invariant per consumption). Mempool nodes MAY admit multiple pending expiring-nonce transactions per sender, reserving `TXPARAM(0x06)` against the payer's available balance for each.
-- **Composition with EIP-8250**: explicitly non-normative. If both ship, the sentinel collapses into EIP-8250's keyed-nonce framing as a reserved `nonce_key == 2**256 - 1`; `NONCE_RING` storage moves under a distinct prefix inside `NONCE_MANAGER`.
-- **Relationship to PR #11681**: stakes the opposite architectural position to PR #11681's absorb-into-base bundle. PR #11681 folds keyed nonces into EIP-8141; PR #11692 introduces another sibling EIP that requires EIP-8141, extending the compose-by-requires layering EIP-8250 established. The two open PRs encode the same question from opposite ends.
-- **Number assigned**: abcoathup assigned EIP number 8266 on May 20 with the standard "Assigning next sequential EIP/ERC/RIP number" note and asked nerolation to create a discussions topic. The discussion thread now exists at [ethereum-magicians.org/t/28575](https://ethereum-magicians.org/t/eip-8266-expiring-nonces-for-frame-transactions/28575) (created May 20, 1 post so far).
-- **Key review discussion**: soispoke (the EIP-8250 lead author) left a substantive inline review on May 19 within hours of submission. Two correctness bugs were caught and acknowledged by nerolation: (1) a same-block replay window at the `d == block.timestamp` boundary, since the strict-inequality check `stored < now` permits a second inclusion in the same block; soispoke's fix is `stored == 0 || stored < now` for stateful validity plus `oldDeadline >= now` for eviction. (2) Pricing concern that the 13000 charge underprices fresh `slot_seen(h)` writes; nerolation reframed the justification to "paired set+clear keeps trie leaves invariant" rather than "overwriting existing slots." soispoke also pushed back on the privacy framing. The replay key is `compute_sig_hash(tx)`, so it only prevents same-hash replay and does not stop two different envelopes from spending the same private note (still needs a nullifier or keyed-nonce check). nerolation walked back the privacy claim: "I later realized that it might not be useful for privacy at all (at least always when there is a nullifier involved)." On mempool policy, nerolation confirmed the one-pending-per-sender rule is intentionally dropped for expiring-nonce mode, with the "payer has enough funds for multiple txs" reservation rule staying in place.
-- **Status**: Open since May 19. CI initially flagged commit-graph errors. Bot reports 1 more reviewer needed (`@g11tech`, `@jochem-brouwer`, `@lightclient`, `@samwilsn`). No editor signoff yet beyond the number assignment.
-
-From nerolation's PR description:
-
-> Proposal to add expiring nonces to Frame Transactions
 
 ---
 
