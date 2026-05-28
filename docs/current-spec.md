@@ -276,6 +276,7 @@ The sponsor pays ETH gas; frame 2 repays the sponsor in ERC-20 tokens.
 | EIP-7392 | Signature registry; interoperability PR #11455 was closed without merge on Apr 23 |
 | EIP-8250 | Keyed-nonces sibling EIP (PR #11598 merged May 11); layers `(nonce_key, nonce_seq)` replay protection on top of EIP-8141 via a `NONCE_MANAGER` system contract. First EIP whose `requires` header includes EIP-8141 |
 | EIP-8266 | Expiring-nonces sibling EIP (PR #11692 merged May 22, co-authored by nerolation and lightclient); second EIP in the compose-by-requires AA stack, with `requires` including both EIP-8141 and EIP-8250. Sentinel-mode (`tx.nonce == 2**64 - 1`) plus a `NONCE_RING` system contract; complements PR #11662's per-tx `EXPIRY_VERIFIER` frame by scoping nonces themselves to time windows |
+| EIP-8272 (pending) | Recent-roots sibling EIP (PR #11726 opened May 25 by soispoke, vbuterin, nerolation); third compose-by-requires sibling, requires both EIP-7843 and EIP-8141. Adds a `recent_root_references` outer-envelope field, a `RECENT_ROOT_ADDRESS` system contract with 8192-slot ring, and a new `RECENTROOTREFLOAD (0xB4)` opcode. Lets validation logic check application-state roots (privacy trees, authorization roots) without reading mutable storage during validation |
 
 ## Key Takeaway
 
@@ -284,6 +285,6 @@ A frame transaction is a sequence of purpose-labeled sub-calls. The protocol run
 ## Read Next
 
 - [EOA Support](/eoa-support) — what existing codeless accounts get for free, and how default code replaces EIP-7702 delegation for common cases.
-- [Feedback Evolution](/feedback-evolution) — how the spec got to its current shape through fifteen phases of community review.
+- [Feedback Evolution](/feedback-evolution) — how the spec got to its current shape through seventeen phases of community review.
 - [Mempool Strategy](/mempool-strategy) — why the validation prefix is the way it is, and how the two-tier mempool handles everything that doesn't fit.
 - [Competing Standards](/competing-standards) — how EIP-8141 compares to EIP-8130, EIP-8175, EIP-8202, and the sibling proposals.

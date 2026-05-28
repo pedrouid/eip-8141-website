@@ -432,7 +432,7 @@ The EthMagicians thread ([topic 28575](https://ethereum-magicians.org/t/eip-8266
 
 ## Active/Open PRs
 
-*As of May 25, 2026.* These PRs represent active design proposals that may change the spec in the near future.
+*As of May 28, 2026.* These PRs represent active design proposals that may change the spec in the near future.
 
 ### PR #11482: Allow using precompiles for VERIFY frames (open since Apr 2)
 
@@ -489,6 +489,23 @@ From lightclient's PR description (carried over from #11575):
 From pedrouid's PR description:
 
 > Guarantors: a payer primitive that admits a transaction to the public mempool even when the sender's `VERIFY` frame is unsafe to simulate. Adopts PR #11555 verbatim. Keyed Nonces: independent replay-protection sequences per `(sender, signer)`. Mirrors EIP-8250 semantics. Diverges only in shape: one `uint64 signer` envelope field instead of `(nonce_key, nonce_seq)`. Signer Binding: tx-scoped `verified_signers` table populated by non-secp256k1 `VERIFY` frames.
+
+### PR #11726: Add EIP-8272 — Recent Roots for Frame Transactions (open since May 25)
+
+**Authors**: soispoke (Thomas Thiery), vbuterin (Vitalik Buterin), nerolation (Toni Wahrstätter)
+
+- **Why**: EIP-8141's restrictive mempool tier forbids validation from reading arbitrary storage controlled by another account, but some validation rules legitimately need to depend on recent application state (privacy-pool tree roots, wallet authorization roots, account validation roots). Without a sanctioned mechanism, those use cases either re-implement signed-snapshot logic per application (with no shared verification surface) or stay locked out of the public mempool entirely.
+- **Proposed change**: New sibling EIP (`EIPS/eip-8272.md`, +394 lines) requiring both EIP-7843 (beacon `slotNumber` field) and EIP-8141. Three moving pieces:
+  - **Outer-envelope field**: new top-level `recent_root_references` list (max 16 entries per tx), each entry a `(source_id, slot, root)` tuple. Source identifiers are `keccak256(source_address || salt)` so a single writer can publish to multiple independent root streams. References target slots strictly before `current_slot` (which clients MUST obtain from the EIP-7843 `slotNumber`, not from `block.timestamp`).
+  - **System contract**: `RECENT_ROOT_ADDRESS` accepts 64-byte calldata (`salt || root`), `msg.sender` becomes the source address, and the entry is stored at `entries[S mod RECENT_ROOT_LENGTH]` keyed by `keccak256(RECENT_ROOT_STORAGE_DOMAIN || source_id || uint64_be(i))`. `RECENT_ROOT_LENGTH = 8192` (8191 usable). Per-source storage is bounded; total state grows only with the number of distinct writers.
+  - **New opcode**: `RECENTROOTREFLOAD = 0xB4` (gas 3) for validation-time read access to verified references; `TXPARAM(0x0D)` returns the reference count.
+- **Validation semantics**: references are checked after the nonce check and before frame execution against the transaction pre-state, so competing blocks at the same slot validate against their own pre-state. A reference is valid if `1 <= current_slot - slot <= RECENT_ROOT_USABLE_WINDOW` and the entry-hash check passes. References are included in `compute_sig_hash(tx)` (not elided by the VERIFY-frame-data rule) and frame data MUST NOT modify the reference set during execution.
+- **Significance**: third compose-by-requires sibling EIP after EIP-8250 (Keyed Nonces) and EIP-8266 (Expiring Nonces). Authored by three of the four EIP-8250 co-authors (soispoke, vbuterin, nerolation), signaling that the compose-by-requires camp is consolidating around a deliberate layered stack rather than a one-off pattern. Would be the first sibling EIP to: introduce a new top-level transaction-payload field (EIP-8250 reshaped `nonce`, EIP-8266 used a sentinel); add a new opcode (`RECENTROOTREFLOAD`, would be the fifth in the frame-transaction opcode family after `TXPARAM`, `FRAMEDATALOAD`, `FRAMEDATACOPY`, `FRAMEPARAM`); and require a non-8141 dependency (EIP-7843 for the consensus slot number).
+- **Status**: Open since May 25. EIP number 8272 assigned at submission. CI initially flagged commit-graph errors. Bot reports 1 more reviewer needed; abcoathup left an editorial review on May 26 ("Looks good enough to merge as a draft"). EthMagicians discussion thread at [topic 28621](https://ethereum-magicians.org/t/eip-8272-recent-roots-for-frame-transactions/28621) (1 post so far).
+
+From soispoke's PR description:
+
+> Proposal to add Recent Root References for Frame Transactions.
 
 ---
 
