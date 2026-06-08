@@ -756,3 +756,73 @@ PR #11681 remains open with no reviewer signoffs since the May 16 submission. Th
 
 **What to watch into Phase 18**: whether EIP-8272 gathers an editor signoff and merges within the same window as its predecessors (EIP-8250 took 7 days from submission to merge; EIP-8266 took 3); whether the `RECENTROOTREFLOAD` opcode triggers a samwilsn-style editorial review questioning whether the sibling EIPs should share an opcode-budget governance check; whether the EIP-7843 dependency exposes any ordering issues with the Hegotá fork sequence (EIP-7843 status TBD); whether PR #11681 reorients in response to the three-sibling baseline; and whether a fourth sibling EIP appears, which would push the question from "is this a pattern" to "what is the upper bound on the compose-by-requires stack."
 
+---
+
+## Phase 18: EIP-8250 Update and ERC-20 Paymaster Resolution (Jun 1 – Jun 4)
+
+*Phase 18 covers the four-day window between the EIP-8272 submission (Phase 17 close) and EIP-8272's merge (Phase 19 open). Two threads close. EIP-8250 evolves in place via PR #11749 on Jun 1 (single keyed nonce generalized to a bounded key set), establishing that sibling EIPs are first-class evolving documents rather than frozen one-shot proposals. trebor's ERC-20 paymaster question from Phase 15 reaches resolution in posts #158-#159 (matt clarifies on Jun 3, trebor commits to a clarifying PR on Jun 4). Both events tie up earlier-phase loose ends without changing the core trajectory.*
+
+### EIP-8250 Adds Nonce Key Sets (Merged)
+
+*soispoke — PR #11749, opened and merged Jun 1*
+
+PR #11749 generalizes EIP-8250 from a single keyed nonce `(nonce_key, nonce_seq)` to a bounded key set `(nonce_keys, nonce_seq)`. The diff is +64/-40, a single file. Auto-merged in 28 minutes with no public review thread.
+
+The motivation lives in use cases the single-key shape forced into either chained transactions or off-chain coordination: multi-device wallets coordinating one session, relayer accounts arbitrating shared inclusion, session-key bundles needing to advance multiple sequences in lockstep within a single transaction. With key sets, all keys in the set advance their `nonce_seq` atomically as part of the payment-approving `APPROVE`; partial advancement is impossible. The single-key path remains expressible as a one-element set, preserving the EIP-8266 sentinel composition.
+
+The architectural signal is that sibling EIPs are first-class evolving documents. EIP-8250 shipped a month ago, has already been depended on by EIP-8266 (`requires: 8141, 8250`), and is now extended in place rather than via a new chain-of-superseding EIP. The pattern that emerges: sibling EIPs evolve as their adopters surface needs, base spec stays load-bearing-but-stable, and the `requires` chain absorbs each evolution without re-litigating dependents. This is the answer to a quiet Phase 17 open question (whether sibling EIPs would stay frozen or evolve) and it answers in favor of in-place evolution.
+
+### ERC-20 Paymaster Question Resolved (External)
+
+*matt, trebor — EthMagicians posts #158-#159, Jun 3-4*
+
+trebor's Phase 15 question (Example 3 in the spec, ERC-20 paymaster feasibility under restrictive-tier rules) gets a direct reply from matt (post #158, Jun 3): the sponsor cannot check the user's ERC-20 balance on-chain in Example 3's restrictive-tier framing. The sponsor must verify the balance off-chain before approving the payment. The risk profile is the same as today's non-AA sponsoring systems, where the sponsor fronts the cost of data and initial validation and is therefore expected to be sophisticated about who they sponsor.
+
+trebor acknowledges in post #159 (Jun 4) and commits to a clarifying PR: Example 3 currently states "Frame 1 'Checks that the user has enough ERC-20 tokens'" which is misleading because the check requires a state read forbidden by restrictive-tier rules. The corrected framing is that Frame 1 should be a signature check by the canonical paymaster (off-chain authorization), not an on-chain balance read.
+
+The resolution is small but important. It is the first time an external researcher's misreading of an EIP-8141 example traced to a documentation bug (rather than a spec gap or a reviewer disagreement) and produced a commitment to a fix. It also resolves the structural concern in post #157 by example: where a verification design genuinely needs flexibility the restrictive tier disallows, the answer is off-chain authorization with a canonical-paymaster signature check, not a relaxation of the restrictive-tier rules.
+
+**What carried into Phase 19**: the EIP-8250 evolution-in-place precedent shows the compose-by-requires camp treats sibling EIPs as living documents, which becomes important context when EIP-8272 merges and EIP-8288 opens within hours of each other in Phase 19.
+
+---
+
+## Phase 19: EIP-8272 Merge and Fourth Sibling EIP (Jun 5 – Jun 8)
+
+*Phase 19 is a one-day cluster on Jun 5 with three-day trailing review activity. EIP-8272 merges three days under EIP-8266's submission-to-merge window. Within an hour of the merge, vbuterin and Thomas Coratger open PR #11772 introducing a fourth sibling EIP: a frame mode for post-quantum signature and STARK aggregation. The compose-by-requires baseline grows from three to four siblings in a single hour, while PR #11681 (absorb-into-base) still sits without reviewer signoffs since May 16.*
+
+### EIP-8272 Recent Roots Merged
+
+*soispoke, vbuterin, nerolation — PR #11726, opened May 25, merged Jun 5*
+
+EIP-8272 lands eleven days after submission, three days faster than the EIP-8266 cycle (and four days faster than EIP-8250's). The diff is +394/-0 lines at `EIPS/eip-8272.md`. abcoathup's May 26 non-editor approval ("Looks good enough to merge as a draft") sat for nine days awaiting editor signoff; lightclient signed off as EIP editor on Jun 5 and the auto-merge fired minutes later. No substantive review-thread changes between submission and merge; the design held through to merge unchanged.
+
+The merge confirms three architectural claims Phase 17 made about EIP-8272 in advance. First, the "pinned target address whose runtime is fixed at activation" pattern (now used by `ENTRY_POINT`, `EXPIRY_VERIFIER`, `NONCE_RING`, `NONCE_MANAGER`, and now `RECENT_ROOT_ADDRESS`) is the dominant deployment idiom for sibling-EIP system contracts. Second, the `RECENTROOTREFLOAD = 0xB4` opcode lands as the fifth opcode in the `0xB*` range, and the compose-by-requires pattern is now demonstrated as a general extension surface (siblings can add opcodes, top-level fields, and external dependencies). Third, the `requires: 7843, 8141` header bakes in the first non-8141 sibling-EIP dependency, putting EIP-7843 on the upstream-watchlist for any Hegotá-fork ordering discussion.
+
+### Fourth Sibling EIP: Frame Type for PQ Sig and STARK Aggregation (Open)
+
+*vbuterin (Vitalik Buterin), Thomas Coratger — PR #11772, opened Jun 5*
+
+Within an hour of EIP-8272 merging, vbuterin opened PR #11772 with a fourth sibling EIP: a new frame mode that aggregates post-quantum signatures and STARK proofs at the block level via a single recursive STARK. The PR is +508 lines, the largest sibling-EIP submission so far. EIP number 8288 is reserved through the EthMagicians thread title ([topic 28723](https://ethereum-magicians.org/t/eip-frame-type-for-quantum-resistant-signature-and-stark-aggregation/28723)) but not yet committed to the file (placeholder `eip-9999.md` pending editor assignment).
+
+The mechanism in three pieces:
+
+1. **`DEP_VERIFY_FRAME_MODE = 3`**: a new frame mode that declares a set of dependencies as `(scheme, data_hash, verification_key)` triples (96 bytes each, up to `MAX_DEPENDENCIES_PER_FRAME = 256` per frame; `MAX_SIGS_PER_TX = 16`, `MAX_STARKS_PER_TX = 1`). Dependencies are not executed; they are recorded for the block-level recursive proof. The two schemes are `LEANSPHINCS_SCHEME = 0x10` (hash-based signature, 3000 gas) and `LEANSTARK_SCHEME = 0x11` (STARK, 30000 gas), reusing Lean Ethereum tooling to maximize shared codebase.
+2. **Block-header `recursive_stark`**: a new top-level header field carrying `[stark_proof, block_deps_hash]`. Block validity requires the single recursive STARK proves all declared dependencies; `block_deps_hash` commits to the concatenation of all per-block dependency triples. `AGGREGATED_VK` is the fixed verifying key for the recursive scheme. Mempool wrappers bundle transactions with their dependencies and witnesses, with recursive aggregation supported at the mempool layer for bandwidth savings. Explicitly FOCIL-compatible (EIP-7805).
+3. **EVM introspection**: dependencies are visible during execution via existing EIP-8141 `FRAMEPARAM` / `FRAMEDATASIZE` / `FRAMEDATACOPY` opcodes, so contracts can iterate dependency frames and read declared triples without new opcodes. The data format is the concatenation of `scheme || data_hash || verification_key` triples.
+
+The strategic significance is the largest single-sibling step yet. EIP-8288 is the first sibling to add a new frame mode (a structural extension to EIP-8141's mode enum, not just an opcode or system contract). It is also the first to introduce a new top-level block-header field, putting sibling-EIP changes into consensus header territory. The `requires` header (`2718, 2929, 2930, 7702, 8141`) is the longest sibling dependency chain yet, dropping the EIP-8250 dependency that EIP-8266 and EIP-8272 both carry, which signals that EIP-8288's frame mode operates independently of the nonce-mechanism layer.
+
+The authoring shift is also notable. Vitalik Buterin authors directly with Thomas Coratger (new contributor from the Lean Ethereum tooling side), bringing the sibling-EIP author roster beyond the soispoke/nerolation/lightclient cluster that shipped the first three siblings. The compose-by-requires camp now spans Buterin himself plus four collaborators across four siblings, all merged or in active review within one month.
+
+All reviewers approved via the auto-bot path. abcoathup left two clarifying comments on Jun 8. No editor signoff yet; the bot indicates the merge is gated on editor approval.
+
+### Compose-by-Requires Stack at Four Siblings (Architectural)
+
+The Phase 17 question about whether a fourth sibling EIP would appear "to push the question from 'is this a pattern' to 'what is the upper bound on the compose-by-requires stack'" is answered the same day. EIP-8288 makes the count four (EIP-8250 merged May 11, EIP-8266 merged May 22, EIP-8272 merged Jun 5, EIP-8288 opened Jun 5), with three merged and one in active review.
+
+Two observations on the trajectory. First, sibling EIPs are demonstrably extending every dimension of EIP-8141: payload schema (EIP-8250 reshape, EIP-8272 new field, EIP-8288 implied via dep frames), opcode space (EIP-8272 `RECENTROOTREFLOAD`), frame-mode enum (EIP-8288 `DEP_VERIFY_FRAME_MODE`), block header (EIP-8288 `recursive_stark`), system-contract storage (every sibling), and dependency graph (EIP-8272 pulls in EIP-7843; EIP-8288 pulls in EIP-7702 and EIP-7805). There is no part of the EIP-8141 surface that the sibling stack has not extended in the last month. The pattern's upper bound, if any, is not yet visible.
+
+Second, PR #11681 (Pedro Gomes's absorb-into-base bundle) still sits without any reviewer signoffs since May 16. The bundle proposed folding three features (guarantors, keyed nonces, signer binding) into EIP-8141 itself. In the three weeks since, the compose-by-requires stack has shipped a key-set generalization (EIP-8250 evolution), the EIP-8272 recent-roots layer, and opened the EIP-8288 PQ aggregation frame mode. Absorbing the equivalent surface into EIP-8141 now would mean folding four sibling EIPs' worth of design surface into one base-spec amendment, with all four authoring clusters needing to coordinate. The empirical argument against absorb-into-base is no longer theoretical; the surface area has grown beyond what one bundle PR can credibly carry.
+
+**What to watch into Phase 20**: whether EIP-8288 gathers editor signoff and merges (vbuterin direct authorship and abcoathup's same-day non-editor approval suggest a fast path); whether the `DEP_VERIFY_FRAME_MODE = 3` addition triggers a samwilsn or jochem-brouwer editorial review on the frame-mode-enum governance question (sibling EIPs now claiming both opcodes and frame modes raises whether there should be a coordinated assignment policy); whether the Lean Ethereum tooling dependency (`LEANSPHINCS_SCHEME`, `LEANSTARK_SCHEME`) gets a separate EIP for the schemes themselves; whether PR #11681 retracts, rebases, or stays open with no further activity; whether trebor lands the promised Example 3 clarification PR; and whether a fifth sibling EIP appears in the next two weeks.
+

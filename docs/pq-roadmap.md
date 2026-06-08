@@ -41,7 +41,9 @@ PQ signature schemes are expensive. Falcon-512 costs over 1M gas in the EVM; Dil
 
 EIP-8141 decouples PQ scheme selection from the transaction format: as precompiles ship, accounts adopt them by updating VERIFY frame logic, no protocol changes needed. The [signatures list](/merged-changes) (PR [#11481](https://github.com/ethereum/EIPs/pull/11481), merged May 22) adds forward-compatibility with signature aggregation, critical since PQ signatures are large (Falcon: ~666 bytes, Dilithium: ~2,420 bytes). The merged design moves per-tx signatures out of `frame.data` into a dedicated outer `signatures` list, so a future block-level aggregated witness can replace the per-tx list entirely, eliding individual signatures from on-wire block serialization. The frame architecture was [designed to keep aggregation open](/feedback-evolution#pq-signature-aggregation-path): VERIFY data is elided from the signature hash, enabling future block-level aggregation.
 
-**Delivers**: practical gas costs for PQ verification. **Does not deliver**: mempool-level key protection or legacy key revocation.
+PR [#11772](https://github.com/ethereum/EIPs/pull/11772) (proposed as EIP-8288, opened Jun 5 by vbuterin and Thomas Coratger) makes that block-level aggregation concrete. It introduces a new frame mode `DEP_VERIFY_FRAME_MODE = 3` that declares `(scheme, data_hash, verification_key)` dependencies and a top-level block-header field `recursive_stark` that aggregates every per-block dependency into a single recursive STARK proof using Lean Ethereum tooling (`LEANSPHINCS_SCHEME = 0x10` at 3000 gas, `LEANSTARK_SCHEME = 0x11` at 30000 gas). This is the fourth sibling EIP in the compose-by-requires stack and the design that turns Stage 2's signature-aggregation hook into a deployable mechanism. EIP-8288 is FOCIL-compatible by construction.
+
+**Delivers**: practical gas costs for PQ verification, and (via EIP-8288 if merged) the recursive-STARK block-level aggregator that makes per-tx PQ signatures economically viable at scale. **Does not deliver**: mempool-level key protection or legacy key revocation.
 
 ---
 

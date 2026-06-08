@@ -430,9 +430,44 @@ The EthMagicians thread ([topic 28575](https://ethereum-magicians.org/t/eip-8266
 
 ---
 
+## EIP-8250 Nonce Key Sets and EIP-8272 Recent Roots Merged — June 1 and June 5, 2026
+
+*Why this mattered: the compose-by-requires stack evolves on two fronts within one week. PR #11749 (June 1) ships EIP-8250's first post-merge revision, generalizing single keyed nonces to bounded key sets. PR #11726 / EIP-8272 (June 5) lands as the third sibling EIP in the stack with the broadest sibling-EIP spec change so far: new top-level transaction-payload field, new opcode (`RECENTROOTREFLOAD = 0xB4`), and a new system contract. The compose-by-requires pattern is now demonstrated to evolve in place (EIP-8250 itself updated post-merge) and to scale (three siblings, one with broad new spec surface), each with distinct authoring overlap among soispoke, vbuterin, nerolation, and lightclient.*
+
+### PR #11749: Add support for nonce key sets (EIP-8250 update)
+
+**Author**: soispoke | **Merged**: June 1 (opened same day)
+
+- **Why**: EIP-8250 originally bound each frame transaction to a single keyed nonce stream via `(nonce_key, nonce_seq)`. Some use cases — multi-device wallets coordinating one session, relayer accounts arbitrating shared inclusion, session-key bundles — need to advance multiple keyed sequences in lockstep within a single transaction. The single-key shape forced these flows into either a chain of dependent transactions or off-chain coordination, neither of which composes cleanly with EIP-8141's atomic-frame semantics.
+- **Spec changes** (+64/-40, single file `EIPS/eip-8250.md`): generalizes the envelope from `(nonce_key, nonce_seq)` to `(nonce_keys, nonce_seq)`, where `nonce_keys` is a bounded set. All keys in the set advance their sequence atomically as part of the payment-approving `APPROVE`; partial-advancement is not possible. The single-key path remains expressible as a one-element set, preserving backward compatibility with EIP-8266 (the expiring-nonce sentinel still composes with single-key streams).
+- **Key review discussion**: auto-merged within 28 minutes of opening with the eth-bot "✅ All reviewers have approved" comment, no public review thread. The PR is the first post-merge revision to any sibling EIP and establishes the precedent that sibling EIPs evolve in place rather than through chain-of-superseding EIPs.
+- **Significance**: small in line count but architecturally informative. Demonstrates that sibling EIPs are first-class evolving documents in the EIP-8141 stack, not frozen one-shot proposals. The pattern now visible: EIP-8141 (base) + EIP-8250 (keyed nonces, with key-set support) + EIP-8266 (expiring nonces, composing with EIP-8250) + EIP-8272 (recent roots, composing with EIP-7843). The compose-by-requires camp continues to consolidate.
+
+### PR #11726: Add EIP-8272 — Recent Roots for Frame Transactions
+
+**Authors**: soispoke (Thomas Thiery), vbuterin (Vitalik Buterin), nerolation (Toni Wahrstätter) | **Merged**: June 5 (opened May 25)
+
+- **Why**: EIP-8141's restrictive mempool tier forbids validation from reading arbitrary storage controlled by another account, but some validation rules legitimately need to depend on recent application state (privacy-pool tree roots, wallet authorization roots, account validation roots). Pre-EIP-8272 options were either re-implementing signed-snapshot logic per application (with no shared verification surface) or staying locked out of the public mempool entirely. EIP-8272 makes the snapshot a protocol primitive.
+- **Spec changes** (+394/-0, single file `EIPS/eip-8272.md`):
+  - **New outer-envelope field**: top-level `recent_root_references` list (max 16 entries per tx), each a `(source_id, slot, root)` tuple. Source identifiers are `keccak256(source_address || salt)` so a single writer publishes to multiple independent root streams. References target slots strictly before `current_slot`, which clients MUST obtain from the EIP-7843 `slotNumber` field rather than deriving from `block.timestamp`.
+  - **New system contract**: `RECENT_ROOT_ADDRESS` accepts 64-byte calldata (`salt || root`); `msg.sender` becomes the source address; the entry is stored at `entries[S mod RECENT_ROOT_LENGTH]` keyed by `keccak256(RECENT_ROOT_STORAGE_DOMAIN || source_id || uint64_be(i))`. `RECENT_ROOT_LENGTH = 8192` slots per source. Per-source storage is bounded; total state grows with the number of distinct writers, not with reference volume.
+  - **New opcode**: `RECENTROOTREFLOAD = 0xB4` (gas 3) for validation-time read access to a verified reference's root; `TXPARAM(0x0D)` returns the reference count. First sibling-EIP-introduced opcode in the frame-transaction stack and the fifth opcode in the `0xB*` range after `TXPARAM`, `FRAMEDATALOAD`, `FRAMEDATACOPY`, `FRAMEPARAM`.
+  - **Validation semantics**: references are checked after the EIP-8141 nonce check and before frame execution, against the transaction pre-state. Competing blocks at the same slot validate against their own pre-states. References are included in `compute_sig_hash(tx)` (not elided by the VERIFY-frame data-elision rule) and frame data MUST NOT mutate the reference set during execution.
+  - **Requires header**: `7843, 8141`. EIP-7843 is the first non-8141 requirement in the sibling-EIP stack.
+- **Key review discussion**: abcoathup left a non-editor approving review on May 26 ("Looks good enough to merge as a draft"). The CI commit-graph errors from the initial submission were addressed in subsequent commits. lightclient signed off as EIP editor on June 5 and the bot fired the auto-merge minutes later.
+- **Significance**: third sibling EIP in the compose-by-requires stack and the first to extend the transaction-payload schema, the opcode space, and the dependency graph beyond EIP-8141 itself. EIP-8250 reshaped an existing field (`nonce`); EIP-8266 used a sentinel; EIP-8272 introduces a brand-new top-level field, a brand-new opcode, and a brand-new non-EIP-8141 dependency. The compose-by-requires pattern is now demonstrated as a general extension surface, not a nonce-mechanism convention. The "pinned target address whose runtime is fixed at activation" pattern (`ENTRY_POINT`, `EXPIRY_VERIFIER`, `NONCE_RING`, `NONCE_MANAGER`, now `RECENT_ROOT_ADDRESS`) is the dominant deployment idiom for sibling-EIP system contracts.
+
+From soispoke's PR description:
+
+> Proposal to add Recent Root References for Frame Transactions.
+
+The EthMagicians thread ([topic 28621](https://ethereum-magicians.org/t/eip-8272-recent-roots-for-frame-transactions/28621)) was created May 20 (1 post, the initial announcement).
+
+---
+
 ## Active/Open PRs
 
-*As of May 28, 2026.* These PRs represent active design proposals that may change the spec in the near future.
+*As of June 8, 2026.* These PRs represent active design proposals that may change the spec in the near future.
 
 ### PR #11482: Allow using precompiles for VERIFY frames (open since Apr 2)
 
@@ -490,22 +525,22 @@ From pedrouid's PR description:
 
 > Guarantors: a payer primitive that admits a transaction to the public mempool even when the sender's `VERIFY` frame is unsafe to simulate. Adopts PR #11555 verbatim. Keyed Nonces: independent replay-protection sequences per `(sender, signer)`. Mirrors EIP-8250 semantics. Diverges only in shape: one `uint64 signer` envelope field instead of `(nonce_key, nonce_seq)`. Signer Binding: tx-scoped `verified_signers` table populated by non-secp256k1 `VERIFY` frames.
 
-### PR #11726: Add EIP-8272 — Recent Roots for Frame Transactions (open since May 25)
+### PR #11772: Add EIP-8288 — Frame type for PQ sig and STARK aggregation (open since June 5)
 
-**Authors**: soispoke (Thomas Thiery), vbuterin (Vitalik Buterin), nerolation (Toni Wahrstätter)
+**Authors**: vbuterin (Vitalik Buterin), Thomas Coratger
 
-- **Why**: EIP-8141's restrictive mempool tier forbids validation from reading arbitrary storage controlled by another account, but some validation rules legitimately need to depend on recent application state (privacy-pool tree roots, wallet authorization roots, account validation roots). Without a sanctioned mechanism, those use cases either re-implement signed-snapshot logic per application (with no shared verification surface) or stay locked out of the public mempool entirely.
-- **Proposed change**: New sibling EIP (`EIPS/eip-8272.md`, +394 lines) requiring both EIP-7843 (beacon `slotNumber` field) and EIP-8141. Three moving pieces:
-  - **Outer-envelope field**: new top-level `recent_root_references` list (max 16 entries per tx), each entry a `(source_id, slot, root)` tuple. Source identifiers are `keccak256(source_address || salt)` so a single writer can publish to multiple independent root streams. References target slots strictly before `current_slot` (which clients MUST obtain from the EIP-7843 `slotNumber`, not from `block.timestamp`).
-  - **System contract**: `RECENT_ROOT_ADDRESS` accepts 64-byte calldata (`salt || root`), `msg.sender` becomes the source address, and the entry is stored at `entries[S mod RECENT_ROOT_LENGTH]` keyed by `keccak256(RECENT_ROOT_STORAGE_DOMAIN || source_id || uint64_be(i))`. `RECENT_ROOT_LENGTH = 8192` (8191 usable). Per-source storage is bounded; total state grows only with the number of distinct writers.
-  - **New opcode**: `RECENTROOTREFLOAD = 0xB4` (gas 3) for validation-time read access to verified references; `TXPARAM(0x0D)` returns the reference count.
-- **Validation semantics**: references are checked after the nonce check and before frame execution against the transaction pre-state, so competing blocks at the same slot validate against their own pre-state. A reference is valid if `1 <= current_slot - slot <= RECENT_ROOT_USABLE_WINDOW` and the entry-hash check passes. References are included in `compute_sig_hash(tx)` (not elided by the VERIFY-frame-data rule) and frame data MUST NOT modify the reference set during execution.
-- **Significance**: third compose-by-requires sibling EIP after EIP-8250 (Keyed Nonces) and EIP-8266 (Expiring Nonces). Authored by three of the four EIP-8250 co-authors (soispoke, vbuterin, nerolation), signaling that the compose-by-requires camp is consolidating around a deliberate layered stack rather than a one-off pattern. Would be the first sibling EIP to: introduce a new top-level transaction-payload field (EIP-8250 reshaped `nonce`, EIP-8266 used a sentinel); add a new opcode (`RECENTROOTREFLOAD`, would be the fifth in the frame-transaction opcode family after `TXPARAM`, `FRAMEDATALOAD`, `FRAMEDATACOPY`, `FRAMEPARAM`); and require a non-8141 dependency (EIP-7843 for the consensus slot number).
-- **Status**: Open since May 25. EIP number 8272 assigned at submission. CI initially flagged commit-graph errors. Bot reports 1 more reviewer needed; abcoathup left an editorial review on May 26 ("Looks good enough to merge as a draft"). EthMagicians discussion thread at [topic 28621](https://ethereum-magicians.org/t/eip-8272-recent-roots-for-frame-transactions/28621) (1 post so far).
+- **Why**: Post-quantum signature schemes (lattice-based, hash-based) cost ~150-200k gas each to verify and weigh 2-3 kB on the wire. STARK proofs are even worse (128-512 kB on-wire, millions of gas to verify). Including these directly per transaction makes privacy protocols impractical and incompatible with FOCIL and Frame Transactions. EIP-8288 lets transactions declare lightweight `(scheme, data_hash, verification_key)` dependencies that get aggregated off-chain into a single recursive STARK at the block level.
+- **Proposed change**: New sibling EIP (placeholder `eip-9999.md`, +508 lines) requiring `2718, 2929, 2930, 7702, 8141`. Three moving pieces:
+  - **New frame mode `DEP_VERIFY_FRAME_MODE = 3`**: declares a set of dependencies as `(scheme, data_hash, verification_key)` triples (96 bytes each, up to `MAX_DEPENDENCIES_PER_FRAME = 256`). These are not executed as EVM code; they are recorded for the block-level recursive proof. The schemes are `LEANSPHINCS_SCHEME = 0x10` and `LEANSTARK_SCHEME = 0x11` (Lean Ethereum hash-based signatures and STARK proofs respectively, with gas constants `3000` and `30000`).
+  - **Block-header field `recursive_stark`**: new top-level header entry `[stark_proof, block_deps_hash]`. Block validity requires the single recursive STARK proves all declared dependencies; `block_deps_hash` commits to the concatenation of all dependency triples. `AGGREGATED_VK` is the fixed verifying key for the recursive scheme.
+  - **EVM introspection**: dependencies are visible during execution via existing EIP-8141 `FRAMEPARAM` / `FRAMEDATASIZE` / `FRAMEDATACOPY` opcodes, so contracts can iterate dependency frames and read declared triples. Per-tx caps: `MAX_SIGS_PER_TX = 16`, `MAX_STARKS_PER_TX = 1`.
+- **Mempool wrapper**: introduces a wrapper format that bundles transactions with their dependencies and witnesses, with recursive aggregation supported at the mempool layer so nodes can combine proofs to reduce gossip bandwidth. Explicitly compatible with FOCIL (EIP-7805).
+- **Significance**: fourth compose-by-requires sibling EIP after EIP-8250, EIP-8266, EIP-8272. First sibling to add a new frame mode (a structural extension to EIP-8141's mode enum, not just an opcode or system contract), and first to introduce a new top-level block-header field. Authored by Vitalik Buterin directly and Thomas Coratger (new contributor), bringing the sibling-author roster beyond the soispoke/nerolation/lightclient cluster. Strategically, the design positions Frame Transactions as the protocol-layer carrier for Ethereum's post-quantum signature transition and for STARK-based privacy/L2 settlement, both load-bearing for the next-major-fork roadmap.
+- **Status**: Open since June 5. EIP number 8288 is reserved via the EthMagicians thread title but not yet committed to the file (still `eip-9999.md` placeholder pending editor assignment). All reviewers approved via auto-bot. abcoathup left two clarifying comments on June 8. EthMagicians thread at [topic 28723](https://ethereum-magicians.org/t/eip-frame-type-for-quantum-resistant-signature-and-stark-aggregation/28723) (3 posts).
 
-From soispoke's PR description:
+From vbuterin's PR description:
 
-> Proposal to add Recent Root References for Frame Transactions.
+> Adds a frame type for quantum-resistant Signature and STARK Aggregation. This supports signatures and STARKs (for privacy or for eg. L2s) in a post-quantum world in a highly gas-efficient way, by providing a way for transactions to declare them as "dependencies", in a way that allows the mempool and the block builder to replace them with a recursive STARK proving that they all exist.
 
 ---
 

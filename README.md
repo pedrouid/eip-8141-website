@@ -9,7 +9,7 @@ Comprehensive analysis of [EIP-8141](https://eips.ethereum.org/EIPS/eip-8141) (F
 | Document | Description |
 |---|---|
 | [Current Spec Overview](./docs/current-spec.md) | What EIP-8141 can do today - execution model, mempool model, transaction structure, opcodes, examples |
-| [Feedback Evolution](./docs/feedback-evolution.md) | How community feedback shaped the spec across 17 phases |
+| [Feedback Evolution](./docs/feedback-evolution.md) | How community feedback shaped the spec across 19 phases |
 | [Original Spec](./docs/original-spec.md) | The Jan 29 submission - original design and what it lacked |
 | [Merged Changes](./docs/merged-changes.md) | Every PR (merged, rejected, open) in chronological order with rationale |
 | [Original vs Latest](./docs/original-vs-latest.md) | Side-by-side comparison of structural changes and philosophical shifts |
