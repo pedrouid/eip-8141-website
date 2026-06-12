@@ -467,7 +467,7 @@ The EthMagicians thread ([topic 28621](https://ethereum-magicians.org/t/eip-8272
 
 ## Active/Open PRs
 
-*As of June 8, 2026.* These PRs represent active design proposals that may change the spec in the near future.
+*As of June 12, 2026.* These PRs represent active design proposals that may change the spec in the near future.
 
 ### PR #11482: Allow using precompiles for VERIFY frames (open since Apr 2)
 
