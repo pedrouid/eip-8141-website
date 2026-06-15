@@ -828,7 +828,7 @@ Second, PR #11681 (Pedro Gomes's absorb-into-base bundle) still sits without any
 
 ---
 
-## Phase 20: EIP-8288 Thread Discussion and Hegotá PFI Status (Jun 9 – Jun 12)
+## Phase 20: EIP-8288 Thread Discussion and Hegotá PFI Status (Jun 9 – Jun 15)
 
 *Phase 20 is a low-tempo continuation window. No new merged 8141 PRs, no new sibling EIPs, but two substantive design questions surface on the EIP-8288 thread (omission accountability, scheme selection between SPHINCS and lattice-based signatures). The Hegotá meta EIP (EIP-8081) receives a PFI promotion batch on Jun 9 that conspicuously does not include EIP-8141 or any of its four sibling EIPs, leaving the entire compose-by-requires stack at CFI status. PR #11681 (absorb-into-base) remains untouched. EIP-8130 (the principal alternative) continues its finalization sweep with a second large naming refactor (`verifier` → `authenticator`).*
 
@@ -842,12 +842,6 @@ albert-garreta (post #4, Jun 11) raises a different concern: the EIP is drafted 
 
 Neither question changes the spec, but both line up as candidate motivations for spec revisions if EIP-8288 advances toward merge. The omission-accountability question in particular is structurally similar to the FOCIL inclusion-list debate (whether builders are accountable for omitting valid transactions) and would likely require coordination with EIP-7805 if the answer changes the spec.
 
-### Helkomine Re-Asks the EIP-7825 Question (External)
-
-*Helkomine — EthMagicians post #160, Jun 11*
-
-Helkomine, who carried the simpler-alternatives debate in Phase 1 (posts #6-14), returns with a one-line question: does this EIP remove the limitations of EIP-7825? EIP-7825 caps per-transaction gas; the question is whether frame transactions, as a typed-transaction extension, are subject to the same cap. The current spec inherits all EIP-7825 limits by default (frame transactions are EIP-2718 typed transactions with no explicit carve-out), so the answer should be no, the limitations are not removed. No response yet from authors, but the question echoes the same broad-relevance pressure Helkomine carried in Phase 1: whether the EIP unnecessarily constrains use cases beyond what the protocol requires.
-
 ### Hegotá PFI Batch Lands Without Sibling EIPs (Governance)
 
 *nixorokish — PR #11786, merged Jun 9*
@@ -855,6 +849,8 @@ Helkomine, who carried the simpler-alternatives debate in Phase 1 (posts #6-14),
 PR #11786 (nixorokish, EIP-8081 maintainer) promotes a batch of nine EIPs from "Considered for Inclusion" to "Proposed for Inclusion" in the Hegotá meta EIP: EIP-7851, EIP-7979, EIP-8131, EIP-8151, EIP-8163, EIP-8173, EIP-8182, EIP-8237, EIP-8279. The list spans EVM control flow (EIP-8173), private transfers (EIP-8182), CL/EL sync (EIP-8237), and several others. Conspicuously absent: EIP-8141 itself, EIP-8250 (Keyed Nonces), EIP-8266 (Expiring Nonces), EIP-8272 (Recent Roots), and EIP-8288 (PQ frame mode draft).
 
 EIP-8141 remains at CFI (added Apr 30 by PR #11537 per ACDE #233 decisions). The sibling EIPs were not formally added to the meta EIP at all and are not under separate status tracking yet. The signal: ACD calls have not yet promoted the AA stack toward Hegotá inclusion. This is consistent with the merge tempo (siblings have been landing throughout May and early June, with the stack still expanding) and the open architectural question (compose-by-requires vs absorb-into-base) that PR #11681 keeps in limbo. The PFI promotion is the next governance threshold the AA stack will face, and the Jun 9 batch passed it by.
+
+A second PFI batch the next day reinforced the pattern: PR #11793 (Jun 10) proposes EIP-2488 and EIP-7645 for Hegotá inclusion, described as minor changes to eliminate technical debt. Neither is an AA-stack EIP, so two consecutive PFI batches over Jun 9 – Jun 10 promoted non-AA work while the EIP-8141 cluster stayed at CFI.
 
 ### EIP-8130 Continues Finalization (External)
 
@@ -864,5 +860,17 @@ EIP-8130 (Coinbase/Base, Account Abstraction by Account Configuration, the princ
 
 The `verifier` → `authenticator` rename is the second large naming refactor in two weeks (the first was `owners` → `actors`, PR #11764 Jun 4). The pattern signals Coinbase/Base settling the public-facing terminology before formal Hegotá inclusion review, with the technical surface already stable. EIP-8130 has shipped roughly twelve PRs in twelve days while EIP-8141's base spec sat stable; the two proposals are converging on different governance trajectories, with EIP-8130 attempting a clean Hegotá submission and EIP-8141 expanding through sibling EIPs without yet seeking PFI promotion.
 
-**What to watch into Phase 21**: whether the EIP-8288 thread questions (omission accountability, scheme selection) produce a spec revision or a separate clarification post from vbuterin/Coratger; whether EIP-8288 gathers editor signoff and merges as Phase 19 predicted; whether the next Hegotá meta-EIP update promotes any AA-stack EIPs to PFI; whether PR #11681 reorients in response to the four-sibling baseline or stays idle past the one-month mark (May 16 + 30 = Jun 15); whether trebor's promised Example 3 clarification PR lands; whether a fifth sibling EIP appears.
+### Helkomine Re-Asks the EIP-7825 Question (External)
+
+*Helkomine — EthMagicians post #160, Jun 11*
+
+Helkomine, who carried the simpler-alternatives debate in Phase 1 (posts #6-14), returns with a one-line question: does this EIP remove the limitations of EIP-7825? EIP-7825 caps per-transaction gas; the question is whether frame transactions, as a typed-transaction extension, are subject to the same cap. The current spec inherits all EIP-7825 limits by default (frame transactions are EIP-2718 typed transactions with no explicit carve-out), so the answer should be no, the limitations are not removed. No response yet from authors, but the question echoes the same broad-relevance pressure Helkomine carried in Phase 1: whether the EIP unnecessarily constrains use cases beyond what the protocol requires.
+
+### PR #11681 Passes the One-Month-Idle Mark (Spec)
+
+*pedrouid (Pedro Gomes) — PR #11681, last activity May 18*
+
+The Phase 19 watch item asked whether PR #11681 (the absorb-into-base bundle of guarantors, keyed nonces, and signer binding) would reorient against the four-sibling baseline or stay idle past the one-month mark (May 16 + 30 = Jun 15). As of Jun 15 the answer is the latter: the PR has had no activity since May 18 (only bot comments), no reviewer signoffs, and still reports one more reviewer needed. Over the same month the compose-by-requires stack added EIP-8272 (merged Jun 5) and opened EIP-8288 (Jun 5), so the surface a single absorb-into-base bundle would now have to carry kept growing while the bundle itself stalled. The empirical signal favors the compose-by-requires camp: sibling EIPs ship, the absorption amendment does not.
+
+**What to watch into Phase 21**: whether the EIP-8288 thread questions (omission accountability, scheme selection) produce a spec revision or a separate clarification post from vbuterin/Coratger; whether EIP-8288 gathers editor signoff and merges as Phase 19 predicted; whether the next Hegotá meta-EIP update promotes any AA-stack EIPs to PFI; whether the stalled PR #11681 is retracted, rebased onto the four-sibling baseline, or left to expire; whether trebor's promised Example 3 clarification PR lands; whether a fifth sibling EIP appears.
 

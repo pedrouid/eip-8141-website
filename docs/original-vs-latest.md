@@ -89,7 +89,7 @@ The original spec deliberately had no `value` field in frames, on the principle 
 
 ## Active Proposals That May Change the Comparison
 
-As of May 25, 2026, several open PRs propose changes that would extend this comparison table:
+As of June 15, 2026, several open PRs propose changes that would extend this comparison table:
 
 | Proposal | PR | Impact |
 |---|---|---|
