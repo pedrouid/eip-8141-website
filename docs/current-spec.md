@@ -278,6 +278,7 @@ The sponsor pays ETH gas; frame 2 repays the sponsor in ERC-20 tokens.
 | EIP-8266 | Expiring-nonces sibling EIP (PR #11692 merged May 22, co-authored by nerolation and lightclient); second EIP in the compose-by-requires AA stack, with `requires` including both EIP-8141 and EIP-8250. Sentinel-mode (`tx.nonce == 2**64 - 1`) plus a `NONCE_RING` system contract; complements PR #11662's per-tx `EXPIRY_VERIFIER` frame by scoping nonces themselves to time windows |
 | EIP-8272 | Recent-roots sibling EIP (PR #11726 merged Jun 5 by soispoke, vbuterin, nerolation); third compose-by-requires sibling, requires both EIP-7843 and EIP-8141. Adds a `recent_root_references` outer-envelope field, a `RECENT_ROOT_ADDRESS` system contract with 8192-slot ring, and a new `RECENTROOTREFLOAD (0xB4)` opcode. Lets validation logic check application-state roots (privacy trees, authorization roots) without reading mutable storage during validation |
 | EIP-8288 (pending) | PQ signature and STARK aggregation sibling EIP (PR #11772 opened Jun 5 by vbuterin and Thomas Coratger); fourth compose-by-requires sibling. Adds a new `DEP_VERIFY_FRAME_MODE = 3` frame mode declaring `(scheme, data_hash, verification_key)` dependencies, and a block-header `recursive_stark` field that aggregates all per-block dependencies into one recursive STARK using Lean Ethereum tooling (`LEANSPHINCS_SCHEME`, `LEANSTARK_SCHEME`). FOCIL-compatible |
+| ERC-8286 (draft) | First application-layer standard built on EIP-8141, and the first frame-transaction proposal in the ERCs repo (ERC PR #1794 opened Jun 3 by chiranjeev13). Defines how ERC-7579 modular accounts (validator, executor, hook, config modules) implement the frame-transaction validation flow: a validator module returns an approval mode the account applies via `APPROVE` during a VERIFY frame. Standardizes the permissions and session-key layer that protocol defaults leave open |
 
 ## Key Takeaway
 
@@ -286,6 +287,6 @@ A frame transaction is a sequence of purpose-labeled sub-calls. The protocol run
 ## Read Next
 
 - [EOA Support](/eoa-support) — what existing codeless accounts get for free, and how default code replaces EIP-7702 delegation for common cases.
-- [Feedback Evolution](/feedback-evolution) — how the spec got to its current shape through twenty phases of community review.
+- [Feedback Evolution](/feedback-evolution) — how the spec got to its current shape through twenty-one phases of community review.
 - [Mempool Strategy](/mempool-strategy) — why the validation prefix is the way it is, and how the two-tier mempool handles everything that doesn't fit.
 - [Competing Standards](/competing-standards) — how EIP-8141 compares to EIP-8130, EIP-8175, EIP-8202, and the sibling proposals.

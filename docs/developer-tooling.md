@@ -100,6 +100,8 @@ Protocol defaults cover batching, signatures, and ETH-funded sponsorship. They d
 
 The bear case is not wrong, it is partially absorbed. Protocol defaults remove fragmentation pressure on the most common features. They do not remove it for permissions, recovery, permissionless (onchain) ERC-20 gas repayment, or the wallet-to-app RPC layer.
 
+A first datapoint on the direction of travel: ERC-8286 (chiranjeev13, [ERC PR #1794](https://github.com/ethereum/ERCs/pull/1794), draft, opened Jun 3 2026) standardizes how [ERC-7579](https://eips.ethereum.org/EIPS/eip-7579) modular accounts (validator, executor, hook, and config modules) implement the EIP-8141 validation flow: a validator module returns an approval mode the account applies via `APPROVE` inside a VERIFY frame. It is the first ERC built on top of EIP-8141, and it targets exactly the permissions and session-key layer that protocol defaults leave open. The signal is that the modular-account ecosystem is starting to organize around native AA as the base rather than fragmenting against it.
+
 ---
 
 ## Summary

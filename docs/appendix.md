@@ -59,6 +59,8 @@
 | Apr 29 | [#11580](https://github.com/ethereum/EIPs/pull/11580) | lightclient | Allow payer to approve before sender (draft; alternative to #11555 guarantors) |
 | May 16 | [#11681](https://github.com/ethereum/EIPs/pull/11681) | pedrouid | Extend EIP-8141 with guarantors, keyed nonces, and signer binding via a `signer` envelope field and an `AUTH_MANAGER` system contract; +810/-74 lines. Successor to closed #11643 after PR #11662 settled the expiry design |
 | Jun 5 | [#11772](https://github.com/ethereum/EIPs/pull/11772) | vbuterin, Thomas Coratger | Add EIP-8288 (proposed): Frame type for PQ sig and STARK aggregation (`eip-9999.md` placeholder, +508 lines). Fourth compose-by-requires sibling EIP. New `DEP_VERIFY_FRAME_MODE = 3` frame mode declaring `(scheme, data_hash, verification_key)` dependencies; block-level `recursive_stark` header field aggregates them into one recursive STARK proof. Lean Ethereum tooling: `LEANSPHINCS_SCHEME` and `LEANSTARK_SCHEME` |
+| Jun 17 | [#11810](https://github.com/ethereum/EIPs/pull/11810) | nerolation | Restore the Behavior section accidentally deleted by the signatures-list merge (#11481); +23/-0, all reviewers approved, awaiting merge |
+| Jun 17 | [#11814](https://github.com/ethereum/EIPs/pull/11814) | morph-dev | Spec cleanup: elide raw `sig.signature` bytes from all sig hashes (restores arbitrary-signature-byte support regressed by #11481, preserves aggregation compatibility), `sig.signer` defaults to `tx.sender`, EXPIRY_VERIFIER must be first frame; +103/-73, several TODOs remain |
 
 ### Related
 
@@ -67,6 +69,8 @@
 | Apr 11 | [#11509](https://github.com/ethereum/EIPs/pull/11509) | benaadams | Add EIP-8223: Contract Payer Transaction (alternative/complementary sponsorship proposal) |
 | Apr 12 | [#11518](https://github.com/ethereum/EIPs/pull/11518) | benaadams | Add EIP-8224: Counterfactual Transaction (shielded gas funding via ZK proofs) |
 | Apr 25 | [#11571](https://github.com/ethereum/EIPs/pull/11571) | SirSpudlington | Update EIP-7932: refactor signature registry to be friendlier to EIP-8141 (rename `sigrecover` → `sigaddress`, add `sigverify`/`sigcosts` precompiles for AA use cases) |
+| Jun 3 | [#1794](https://github.com/ethereum/ERCs/pull/1794) | chiranjeev13 | Add ERC-8286: Modular Accounts for Frame Transactions (ERCs repo). Defines how ERC-7579 modular accounts implement the EIP-8141 validation flow; first application-layer standard built on EIP-8141 |
+| Jun 5 | [#11773](https://github.com/ethereum/EIPs/pull/11773) | forshtat | Move EIP-2542 to Withdrawn, superseded by EIP-8141 (first external AA proposal formally withdrawn in favor of frame transactions) |
 
 ### Closed (not merged)
 
@@ -105,8 +109,7 @@
 | jochem-brouwer | @jochem-brouwer | Detailed canonical paymaster review |
 | Seungmin Jeon | @sm-stack | PoC implementation, atomic batch bit flag idea |
 | rmeissner | @rmeissner | Safe team representative, value-in-frames advocate |
-| node.cm | @node.cm | Spec reviewer, VERIFY frame count observation |
-| Chiranjeev Mishra | @chiranjeev13 | Spec consistency fixes |
+| Chiranjeev Mishra (node.cm) | @chiranjeev13 | Forum reviewer (VERIFY frame count observation) and author of the closed spec-consistency PR #11488; author of ERC-8286 Modular Accounts for Frame Transactions (ERC PR #1794, opened Jun 3), the first application-layer standard built on EIP-8141 |
 | Ben Adams | @benaadams | Spec tightening (PR #11521, merged Apr 14), author of EIP-8223 (Contract Payer Transaction) and EIP-8224 (Counterfactual Transaction) |
 | Jacopo | @jacopo-eth | Proposed FRAMERETURNDATASIZE/FRAMERETURNDATACOPY for multi-step flows |
 | Franco Victorio | @fvictorio | Raised question about validation-frame execution ordering vs non-frame txs |
@@ -119,6 +122,7 @@
 | Sam Wilson | @SamWilsn | EIP editor; spec-coherence review (post #149, May 8) on naming, empty-target representation, opcode-budget, and `FRAMEDATACOPY` revert semantics |
 | trebor | @trebor | Privacy-focused paymaster researcher (Kohaku); raised the Example 3 (ERC-20 paymaster) feasibility question in posts #156-157 (May 21). After matt's clarification in post #158 (Jun 3), trebor committed in post #159 (Jun 4) to a PR clarifying Example 3 in the EIP (Frame 1 should be a signature check by the canonical paymaster, not an on-chain ERC-20 balance read) |
 | Thomas Coratger | (not on GitHub directly in PR author list) | Co-author with vbuterin of EIP-8288 (PR #11772, opened Jun 5): Frame type for PQ sig and STARK aggregation. Lean Ethereum tooling contributor |
+| Milos Stankovic | @morph-dev | Author of PR #11814 (spec cleanup and clarifications, opened Jun 17): elides raw signature bytes from all sig hashes to restore arbitrary-signature-byte support and preserve aggregation compatibility, defaults `sig.signer` to `tx.sender`, makes the EXPIRY_VERIFIER first-frame mempool rule explicit |
 
 ## External Resources
 
@@ -146,6 +150,7 @@
 - [EIP-8266: Expiring Nonces for Frame Transactions](https://ethereum-magicians.org/t/eip-8266-expiring-nonces-for-frame-transactions/28575)
 - [EIP-8272: Recent Roots for Frame Transactions](https://ethereum-magicians.org/t/eip-8272-recent-roots-for-frame-transactions/28621)
 - [EIP-8288: Frame type for PQ sig and STARK aggregation](https://ethereum-magicians.org/t/eip-frame-type-for-quantum-resistant-signature-and-stark-aggregation/28723)
+- [ERC-8286: Modular Accounts for Frame Transactions](https://ethereum-magicians.org/t/erc-8286-modular-accounts-for-frame-transactions/28695)
 - [Svalbard AA Breakout Session Notes](https://hackmd.io/@nixorokish/svalbard-aa-breakout)
 
 ## Competing Standards

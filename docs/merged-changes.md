@@ -467,7 +467,7 @@ The EthMagicians thread ([topic 28621](https://ethereum-magicians.org/t/eip-8272
 
 ## Active/Open PRs
 
-*As of June 15, 2026.* These PRs represent active design proposals that may change the spec in the near future.
+*As of June 24, 2026.* These PRs represent active design proposals that may change the spec in the near future.
 
 ### PR #11482: Allow using precompiles for VERIFY frames (open since Apr 2)
 
@@ -525,6 +525,14 @@ From pedrouid's PR description:
 
 > Guarantors: a payer primitive that admits a transaction to the public mempool even when the sender's `VERIFY` frame is unsafe to simulate. Adopts PR #11555 verbatim. Keyed Nonces: independent replay-protection sequences per `(sender, signer)`. Mirrors EIP-8250 semantics. Diverges only in shape: one `uint64 signer` envelope field instead of `(nonce_key, nonce_seq)`. Signer Binding: tx-scoped `verified_signers` table populated by non-secp256k1 `VERIFY` frames.
 
+### ERC PR #1794: Add ERC-8286 — Modular Accounts for Frame Transactions (open since June 3)
+
+**Author**: chiranjeev13 (node.cm)
+
+- **Why**: Defines how [ERC-7579](https://eips.ethereum.org/EIPS/eip-7579) modular smart accounts implement the EIP-8141 frame-transaction validation flow. ERC-7579 stays the core module system (validator, executor, hook, config modules); ERC-8286 adds the validation path for frame transactions. First application-layer standard built on EIP-8141 and the first frame-transaction proposal tracked in the ERCs repo rather than EIPs.
+- **Proposed change** (+425 lines, new file `ERCS/erc-8286.md`): a validator module returns an approval mode that the account applies via the `APPROVE` instruction during a VERIFY frame, mapping ERC-7579's module interfaces onto EIP-8141's validation semantics. Targets the permissions and session-key layer that EIP-8141 protocol defaults deliberately leave open.
+- **Status**: Draft; requires one more Editor review (g11tech, jochem-brouwer, samwilsn, xinbenlv) and CI flagged commit errors. EthMagicians thread at [topic 28695](https://ethereum-magicians.org/t/erc-8286-modular-accounts-for-frame-transactions/28695) (1 post, the June 3 announcement, no discussion yet).
+
 ### PR #11772: Add EIP-8288 — Frame type for PQ sig and STARK aggregation (open since June 5)
 
 **Authors**: vbuterin (Vitalik Buterin), Thomas Coratger
@@ -536,11 +544,31 @@ From pedrouid's PR description:
   - **EVM introspection**: dependencies are visible during execution via existing EIP-8141 `FRAMEPARAM` / `FRAMEDATASIZE` / `FRAMEDATACOPY` opcodes, so contracts can iterate dependency frames and read declared triples. Per-tx caps: `MAX_SIGS_PER_TX = 16`, `MAX_STARKS_PER_TX = 1`.
 - **Mempool wrapper**: introduces a wrapper format that bundles transactions with their dependencies and witnesses, with recursive aggregation supported at the mempool layer so nodes can combine proofs to reduce gossip bandwidth. Explicitly compatible with FOCIL (EIP-7805).
 - **Significance**: fourth compose-by-requires sibling EIP after EIP-8250, EIP-8266, EIP-8272. First sibling to add a new frame mode (a structural extension to EIP-8141's mode enum, not just an opcode or system contract), and first to introduce a new top-level block-header field. Authored by Vitalik Buterin directly and Thomas Coratger (new contributor), bringing the sibling-author roster beyond the soispoke/nerolation/lightclient cluster. Strategically, the design positions Frame Transactions as the protocol-layer carrier for Ethereum's post-quantum signature transition and for STARK-based privacy/L2 settlement, both load-bearing for the next-major-fork roadmap.
-- **Status**: Open since June 5. EIP number 8288 is reserved via the EthMagicians thread title but not yet committed to the file (still `eip-9999.md` placeholder pending editor assignment). All reviewers approved via auto-bot. abcoathup left two clarifying comments on June 8. EthMagicians thread at [topic 28723](https://ethereum-magicians.org/t/eip-frame-type-for-quantum-resistant-signature-and-stark-aggregation/28723) (3 posts).
+- **Status**: Open since June 5. EIP number 8288 is reserved via the EthMagicians thread title but not yet committed to the file (still `eip-9999.md` placeholder pending editor assignment). All reviewers approved via auto-bot. abcoathup left clarifying comments through June 15. EthMagicians thread at [topic 28723](https://ethereum-magicians.org/t/eip-frame-type-for-quantum-resistant-signature-and-stark-aggregation/28723) (6 posts): vbuterin answered the SPHINCS-vs-lattice question in post #5 (Jun 15), defending a purely hash-based base layer; pipavlo82 followed in post #6 (Jun 17) proposing hash-only dependency receipts to address omission accountability.
 
 From vbuterin's PR description:
 
 > Adds a frame type for quantum-resistant Signature and STARK Aggregation. This supports signatures and STARKs (for privacy or for eg. L2s) in a post-quantum world in a highly gas-efficient way, by providing a way for transactions to declare them as "dependencies", in a way that allows the mempool and the block builder to replace them with a recursive STARK proving that they all exist.
+
+### PR #11810: Restore Behavior section (open since June 17)
+
+**Author**: nerolation
+
+- **Why**: The signatures-list refactor (PR #11481, merged May 22) accidentally deleted the spec's Behavior section. This PR restores it.
+- **Proposed change**: +23/-0, re-adds the deleted prose with no semantic change beyond restoration.
+- **Status**: All reviewers approved (lightclient signed off); awaiting merge. Part of the June 17 cleanup pair with PR #11814, following matt's commitment in magicians post #164 to restore the regressed signature behavior.
+
+### PR #11814: Spec cleanup and clarifications (open since June 17)
+
+**Author**: morph-dev (Milos Stankovic, new contributor)
+
+- **Why**: Follows matt's June 17 commitment (magicians post #164) to restore arbitrary signature-byte support after the signatures-list merge (PR #11481) regressed custom schemes like passkeys. Surfaced by nlordell and DanielVF in posts #161-163.
+- **Proposed change** (+103/-73):
+  - Raw `sig.signature` bytes are elided from every `sig_hash`. Because all signatures must be valid for the tx to be valid, committing to `sig.msg` indirectly commits to the signatures; eliding the raw bytes keeps signatures insertable after hashing (fixing the circular-dependency regression) and preserves future signature-aggregation compatibility.
+  - `sig.signer` may be empty and defaults to `tx.sender`.
+  - Mempool: the EXPIRY_VERIFIER frame may only be the first frame in the frame list.
+  - Moves several sections to more appropriate locations.
+- **Status**: Open; requires one more Author review. morph-dev left several `TODO` markers flagging clarifications to resolve before merge, so this is a cleanup pass rather than a finished fix.
 
 ---
 

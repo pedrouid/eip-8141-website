@@ -559,6 +559,12 @@ PR #11749 generalizes EIP-8250 from a single keyed nonce to a bounded key set, a
 
 matt replied (#158) to trebor's Phase 15 question: in Example 3's restrictive-tier framing, the sponsor cannot check the user's ERC-20 balance on-chain and must verify off-chain before approving, the same risk profile as today's non-AA sponsoring systems. trebor acknowledged (#159) and committed to a clarifying PR: Example 3's "Frame 1 checks that the user has enough ERC-20 tokens" is misleading, since that check needs a forbidden state read; the correct framing is a signature check by the canonical paymaster (off-chain authorization), not an on-chain balance read. The first time an external researcher's misreading traced to a documentation bug rather than a spec gap, and it resolves the structural concern in #157 by example: where verification needs flexibility the restrictive tier disallows, the answer is off-chain authorization, not relaxing the tier.
 
+### ERC-8286 Brings Modular Accounts to Frame Transactions (External)
+
+*chiranjeev13 (node.cm) — ERC PR #1794, opened Jun 3*
+
+chiranjeev13 opens ERC-8286, the first application-layer standard built on EIP-8141 and the first frame-transaction proposal to live in the ERCs repo rather than EIPs. It defines how ERC-7579 modular accounts (validator, executor, hook, and config modules) implement the validation flow: a validator module returns an approval mode the account applies via APPROVE inside a VERIFY frame. The significance is directional: the ERC-4337 and ERC-7579 modular-account ecosystem is starting to standardize on native AA as its base rather than treat it as a competitor, the adoption signal the developer-tooling bull case predicted. Still a draft, with one editor review outstanding and CI flagged, and no thread discussion yet beyond the Jun 3 announcement ([topic 28695](https://ethereum-magicians.org/t/erc-8286-modular-accounts-for-frame-transactions/28695)).
+
 **What carried into Phase 19**: the EIP-8250 evolution-in-place precedent shows the compose-by-requires camp treats siblings as living documents, important context when EIP-8272 merges and EIP-8288 opens within hours of each other.
 
 ---
@@ -628,3 +634,33 @@ Helkomine, who carried the simpler-alternatives debate in Phase 1, returns askin
 The Phase 19 watch item asked whether PR #11681 (absorb-into-base) would reorient or stay idle past the one-month mark (May 16 + 30 = Jun 15). As of Jun 15 it stayed idle: no activity since May 18, no reviewer signoffs. Over the same month the compose-by-requires stack added EIP-8272 and opened EIP-8288, so the surface the bundle would have to carry kept growing while the bundle stalled. The empirical signal favors compose-by-requires: siblings ship, the absorption amendment does not.
 
 **What to watch into Phase 21**: whether the EIP-8288 thread questions get an author response or spec revision; whether EIP-8288 merges; whether the next Hegotá update promotes any AA-stack EIPs to PFI; whether the stalled PR #11681 is retracted or rebased; whether trebor's Example 3 clarification lands; and whether a fifth sibling EIP appears.
+
+## Phase 21: Signatures-List Regression and Spec Cleanup (Jun 15 – Jun 24)
+
+*The signatures-list refactor merged May 22 turns out to have dropped support for arbitrary signature bytes, breaking custom schemes like passkeys. The community surfaces it, matt acknowledges the regression, and two cleanup PRs open to fix it. On the PQ thread, vbuterin answers the scheme-selection question, resolving a Phase 20 watch item.*
+
+### EIP-8288 Author Defends Hash-Based Minimalism (External)
+
+*vbuterin, pipavlo82 — [topic 28723](https://ethereum-magicians.org/t/eip-frame-type-for-quantum-resistant-signature-and-stark-aggregation/28723) posts #5-6, Jun 15 – Jun 17*
+
+vbuterin answers albert-garreta's Phase 20 question on why the PQ frame mode is drafted around SPHINCS rather than lattice schemes (#5, Jun 15): the base layer should stay purely hash-based to minimize dependencies and infrastructure maintenance, accepting the larger signature size as the cost. pipavlo82 accepts the rationale and revives the omission-accountability thread (#6, Jun 17), now proposing hash-only dependency receipts kept outside the core frame so future inclusion and omission checks need no base-layer complexity. The exchange resolves the Phase 20 watch item, an author did respond, without changing the spec; the omission question stays a mempool and builder concern deferred to FOCIL coordination.
+
+### Signatures-List Refactor Breaks Arbitrary Signature Bytes (Spec)
+
+*nlordell, DanielVF, matt — posts #161-164, Jun 15 – Jun 17*
+
+The signatures-list outer field (PR #11481, merged May 22) draws its first serious scrutiny. nlordell (#161, Jun 15) argues custom signature schemes like passkeys are under-supported: a signature must commit to the frame-tx hash, but that hash now includes the signatures list, creating a circular dependency. DanielVF (#162, Jun 16) and nlordell (#163) work out that VERIFY frame data is elided from the sig hash, so a signature can be computed and inserted afterward, but the same elision was not carried over to the new signatures list. matt (#164, Jun 17) acknowledges the merge dropped support for arbitrary signature bytes and commits to restoring it. This is the first confirmed regression from a merged 8141 PR, and it validates the cost of the fast merge tempo flagged in earlier phases.
+
+### Two Cleanup PRs Open to Fix the Regression (Spec)
+
+*nerolation — PR #11810; morph-dev — PR #11814, both Jun 17*
+
+matt's commitment lands as two PRs the same day. PR #11810 (nerolation, all reviewers approved) restores a Behavior section accidentally deleted in an earlier merge. PR #11814 (morph-dev, a new contributor) is the substantive cleanup: raw `sig.signature` bytes are elided from every sig hash, so signatures stay insertable after hashing and remain aggregatable for future PQ work; `sig.signer` defaults to `tx.sender` when empty; and the mempool rule that EXPIRY_VERIFIER must be the first frame is made explicit. morph-dev left several TODOs flagging open clarifications, so the PR reads as a cleanup pass rather than a finished fix. Neither has merged as of this sync.
+
+### PR #11681 Stays Idle (Spec)
+
+*pedrouid — PR #11681, last activity May 18*
+
+No change: the absorb-into-base amendment remains idle past its one-month mark, while the compose-by-requires stack of four siblings continues to set the direction. The architectural question is unchanged from Phase 20.
+
+**What to watch into Phase 22**: whether PRs #11810 and #11814 merge and fully restore arbitrary-signature-byte support; whether morph-dev's TODOs trigger further spec questions; whether EIP-8288 gets an EIP number and merges; whether trebor's Example 3 clarification lands; whether the next Hegotá update promotes any AA-stack EIP to PFI; whether ERC-8286 (the first ERC built on EIP-8141) advances toward editor review; and whether a fifth sibling EIP appears.
