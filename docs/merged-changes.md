@@ -467,7 +467,7 @@ The EthMagicians thread ([topic 28621](https://ethereum-magicians.org/t/eip-8272
 
 ## Active/Open PRs
 
-*As of June 24, 2026.* These PRs represent active design proposals that may change the spec in the near future.
+*As of June 25, 2026.* These PRs represent active design proposals that may change the spec in the near future.
 
 ### PR #11482: Allow using precompiles for VERIFY frames (open since Apr 2)
 
@@ -529,7 +529,7 @@ From pedrouid's PR description:
 
 **Author**: chiranjeev13 (node.cm)
 
-- **Why**: Defines how [ERC-7579](https://eips.ethereum.org/EIPS/eip-7579) modular smart accounts implement the EIP-8141 frame-transaction validation flow. ERC-7579 stays the core module system (validator, executor, hook, config modules); ERC-8286 adds the validation path for frame transactions. First application-layer standard built on EIP-8141 and the first frame-transaction proposal tracked in the ERCs repo rather than EIPs.
+- **Why**: Defines how [ERC-7579](https://eips.ethereum.org/EIPS/eip-7579) modular smart accounts implement the EIP-8141 frame-transaction validation flow. ERC-7579 stays the core module system (validator, executor, hook, config modules); ERC-8286 adds the validation path for frame transactions. First application-layer standard built on EIP-8141 and the first frame-transaction proposal tracked in the ERCs repo rather than EIPs. The file's `requires: 7579, 8141` header makes it the only ERC to date that takes EIP-8141 as a hard dependency (ERC-8211 Smart Batching, PR #1638, only mentions EIP-8141 as a forward-compatibility transport, without requiring it).
 - **Proposed change** (+425 lines, new file `ERCS/erc-8286.md`): a validator module returns an approval mode that the account applies via the `APPROVE` instruction during a VERIFY frame, mapping ERC-7579's module interfaces onto EIP-8141's validation semantics. Targets the permissions and session-key layer that EIP-8141 protocol defaults deliberately leave open.
 - **Status**: Draft; requires one more Editor review (g11tech, jochem-brouwer, samwilsn, xinbenlv) and CI flagged commit errors. EthMagicians thread at [topic 28695](https://ethereum-magicians.org/t/erc-8286-modular-accounts-for-frame-transactions/28695) (1 post, the June 3 announcement, no discussion yet).
 

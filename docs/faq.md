@@ -128,6 +128,10 @@ Move validation logic from `validateUserOp` into VERIFY frame code that calls `A
 
 Yes, via account code. Default code covers only secp256k1 on the primary key (P256 was removed from default code by PR #11621, May 11); richer policies (expiry, per-call caps, allowlists) live in the account's own VERIFY logic and remain valid on-chain. Whether such a transaction propagates publicly depends on the [mempool tier](/mempool-strategy#two-tiers-in-one-mempool) it fits.
 
+**5.8. Is there a standard for existing modular smart accounts to use frame transactions?**
+
+Yes. ERC-8286 (draft, `requires: 7579, 8141`) standardizes how ERC-7579 modular accounts implement the frame validation flow: a validator module returns an approval mode the account applies via `APPROVE` in a VERIFY frame. See [Developer Tooling](/developer-tooling#where-fragmentation-risk-still-lives).
+
 ---
 
 ## 6. Post-Quantum Readiness

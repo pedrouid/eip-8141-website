@@ -122,7 +122,8 @@ This repo tracks the evolution of EIP-8141 (Frame Transaction). It is a VitePres
 | Latest spec | `https://github.com/ethereum/EIPs/blob/master/EIPS/eip-8141.md` | Ground truth for current state |
 | Closed/merged PRs | `gh pr list --repo ethereum/EIPs --search "8141" --state all` | Chronological record of spec changes |
 | Open PRs | `gh pr list --repo ethereum/EIPs --search "8141" --state open` | Pending proposals and context |
-| PR comments | `gh pr view --repo ethereum/EIPs <number> --comments` | Design rationale not in the spec |
+| ERC-layer proposals | `gh pr list --repo ethereum/ERCs --search "8141" --state all` and `--search "frame transaction"` | Application-layer standards that build on or reference EIP-8141 (e.g. ERC-8286 modular accounts, ERC-8211 smart batching). The `ethereum/ERCs` repo is separate from `ethereum/EIPs` and is easy to miss |
+| PR comments | `gh pr view --repo ethereum/EIPs <number> --comments` (or `--repo ethereum/ERCs`) | Design rationale not in the spec |
 | EthMagicians thread | `https://ethereum-magicians.org/t/frame-transaction/27617` | Community feedback and debates |
 | ethresear.ch | `https://ethresear.ch/t/frame-transactions-through-a-statelessness-lens/24538` | Statelessness and mempool concerns |
 
@@ -136,6 +137,7 @@ When updating the repo to capture new developments, follow this checklist in ord
 
 - **Fetch latest spec** from `master` branch - compare against `current-spec.md`
 - **Search for new PRs** since the last documented PR (check `appendix.md` for the most recent)
+- **Search the `ethereum/ERCs` repo too**, not just `ethereum/EIPs`. Run `gh pr list --repo ethereum/ERCs --search "8141" --state all` and `--search "frame transaction"`, then for any hit confirm it is a real reference (check the diff for an `8141` in the `requires:` header or a substantive mention, not a coincidental digit-run). Application-layer ERCs that build on EIP-8141 (ERC-8286, `requires: 7579, 8141`) or name it as a future transport (ERC-8211 Smart Batching) live here and are invisible to an EIPs-only search.
 - **Read all comments** on new and updated PRs - PR comments often contain critical design rationale
 - **Read new EthMagicians posts** beyond the last documented post number (check `appendix.md`)
 - **Check competing proposals** for new PRs or discussion threads (EIP-8130, EIP-8175, EIP-8202)
@@ -155,7 +157,8 @@ Each document has a specific scope. Update only the relevant ones:
 | `original-vs-latest.md` | Any merged PR that changes structural behavior, constants, opcode set, default-code rules, or deployment mechanism |
 | `competing-standards.md` | New competing EIPs, new PRs on existing competitors, new comparison threads |
 | `vops-compatibility.md` | New VOPS/statelessness developments, state growth data, witness cost changes |
-| `faq.md` | New questions arise from community, or answers change due to spec updates |
+| `faq.md` | New questions arise from community, or answers change due to spec updates. Also add or refresh a `section.question` Q&A whenever a Spec/Topics/Alternatives change alters a reader-facing answer (new sibling EIP, new constant, new adoption standard); see §2e. |
+| `glossary.md` | Any change that introduces a new term, opcode, frame mode, constant, system contract, envelope field, sibling/related EIP, ERC, or named concept (e.g. compose-by-requires, guarantors), or renames/changes an existing one. The glossary indexes jargon from every other doc; audit it whenever Spec/Topics/Alternatives change (see §2e). |
 | `mempool-strategy.md` | New mempool tier proposals, VOPS-extension changes, witness-cost analysis, relayer-substitute patterns |
 | `developer-tooling.md` | New bear/bull arguments emerge from wallet/app developers, or protocol defaults expand |
 | `eoa-support.md` | Default code spec changes (new sig schemes, scope rules), or new comparisons to EIP-7702 surfaces |
@@ -252,6 +255,18 @@ Do not add ad-hoc sections. If something looks like it wants a new section, ask 
 
 **Post-count and sync-snapshot tracking**: do not embed sync-snapshot counters (post count, PR count, "as of Apr X") inside appendix link text. The global sync date lives in memory and in `README.md`; `appendix.md` is evergreen.
 
+### 2e. Keeping the reference docs (`appendix.md`, `glossary.md`, `faq.md`) in sync
+
+The Appendix (sources index), Glossary (concepts index), and FAQ (common questions) are **downstream of every other section**. They do not generate new facts; they index what the Spec, Topics, and Alternatives docs already say. Because of that they drift silently: a sync can add a sibling EIP, a new opcode, a system contract, or an external source to the primary docs and leave the indexes stale. Treat updating them as a required closing step of every sync, not an optional one.
+
+After editing any Spec, Topics, or Alternatives doc, propagate as follows:
+
+- **Appendix** — for every PR, contributor, external link, or competing/complementary proposal newly referenced in another doc, confirm it has a corresponding entry (PR timeline / Key Contributors / External Resources / Competing Standards). The appendix is the union of all sources cited anywhere on the site; a source that appears in a topic doc but not the appendix is a bug. Structure per §2d.
+- **Glossary** — for every new term a change introduces (opcode, frame mode, constant, system contract, envelope field, sibling/related EIP, ERC, or named concept such as compose-by-requires or guarantors), add a glossary entry in the correct category, alphabetical within the category. A term that appears in bold or code across a doc but is undefined in the glossary is a gap. When a merged PR changes a constant or renames a term, update the existing entry rather than leaving it stale.
+- **FAQ** — when a change answers, or changes the answer to, a question a reader would plausibly ask, add or update a `section.question`-indexed Q&A (1-2 lines, question and answer on separate lines). New sibling EIPs, new default-code behavior, new adoption standards, and changed constants are the common triggers.
+
+The significant-PR fan-out (§2a) routes structural merges into the relevant Spec and Topics docs; this step ensures the same change also lands in the three indexes. A sync that updates a primary doc without checking these three is incomplete.
+
 ### 3. Update Infrastructure
 
 - **README.md**: Update "Last updated" date and coverage numbers. Update document table if docs added.
@@ -272,6 +287,7 @@ After updates, check:
 - **`appendix.md` structure audit.** Confirm per §2d: sections appear in the fixed order (Sources, Complete PR Timeline, Key Contributors, External Resources, Competing Standards); no ad-hoc section duplicates content that already lives in External Resources; every External Resources entry is a bare-title link with no description or counter; every competing proposal mentioned in `competing-standards.md` or a per-EIP page has a link under Competing Standards; no comparison threads or analyses are listed under Competing Standards.
 - **Em-dash audit.** Grep `—` across `docs/` and classify every hit against the four allowed contexts in Formatting Rules (titles, dates attached to a label, ranges, list/table topic-description separators). Any em dash used as a parenthetical separator or colon substitute inside a sentence is a violation and must be rewritten with commas, a period, a semicolon, a colon, or parentheses. This applies to FAQ answers, topic-doc prose, phase summaries, and "Why this mattered" lines equally.
 - **Topic-doc TL;DR audit.** For every file in the Topics category (`eoa-support.md`, `pq-roadmap.md`, `developer-tooling.md`, `mempool-strategy.md`, `vops-compatibility.md`, `competing-standards.md`), grep `^## ` and confirm the first match is `## TL;DR`. Any other section appearing before the TL;DR is a violation per Topic-doc structure; move it below the TL;DR before committing.
+- **Reference-doc completeness audit (§2e).** Confirm the three index docs absorbed this sync's changes. (1) **Glossary**: for every new opcode, constant, system-contract name, frame mode, sibling/related EIP, ERC, and named concept introduced this sync, grep `docs/glossary.md` and confirm an entry exists; confirm no existing entry contradicts a merged change (e.g. a changed constant or governance status). (2) **Appendix**: confirm every PR, contributor, external URL, and competing/complementary proposal newly cited in any doc appears in the appendix (the `appendix.md` structure audit above covers placement). (3) **FAQ**: confirm any reader-facing answer changed this sync is reflected. A primary-doc edit without the matching index update is an incomplete sync.
 
 **Distinguish event-timestamp dates from sync-snapshot dates:**
 

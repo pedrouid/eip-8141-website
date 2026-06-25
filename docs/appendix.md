@@ -66,8 +66,10 @@
 
 | Date | PR | Author | Description |
 |---|---|---|---|
+| Mar 30 | [#1638](https://github.com/ethereum/ERCs/pull/1638) | oxshaman | Add ERC-8211: Smart Batching (ERCs repo). Transport-agnostic composable batch encoding; names EIP-8141 SENDER frames as a forward-compatibility execution path, does not require it |
 | Apr 11 | [#11509](https://github.com/ethereum/EIPs/pull/11509) | benaadams | Add EIP-8223: Contract Payer Transaction (alternative/complementary sponsorship proposal) |
 | Apr 12 | [#11518](https://github.com/ethereum/EIPs/pull/11518) | benaadams | Add EIP-8224: Counterfactual Transaction (shielded gas funding via ZK proofs) |
+| Apr 22 | [#11438](https://github.com/ethereum/EIPs/pull/11438) | Giulio2002 | Add EIP-8202: Scheme-Agile Transactions (alternative AA proposal; PQ signatures on L1 without general AA) |
 | Apr 25 | [#11571](https://github.com/ethereum/EIPs/pull/11571) | SirSpudlington | Update EIP-7932: refactor signature registry to be friendlier to EIP-8141 (rename `sigrecover` → `sigaddress`, add `sigverify`/`sigcosts` precompiles for AA use cases) |
 | Jun 3 | [#1794](https://github.com/ethereum/ERCs/pull/1794) | chiranjeev13 | Add ERC-8286: Modular Accounts for Frame Transactions (ERCs repo). Defines how ERC-7579 modular accounts implement the EIP-8141 validation flow; first application-layer standard built on EIP-8141 |
 | Jun 5 | [#11773](https://github.com/ethereum/EIPs/pull/11773) | forshtat | Move EIP-2542 to Withdrawn, superseded by EIP-8141 (first external AA proposal formally withdrawn in favor of frame transactions) |
@@ -123,6 +125,13 @@
 | trebor | @trebor | Privacy-focused paymaster researcher (Kohaku); raised the Example 3 (ERC-20 paymaster) feasibility question in posts #156-157 (May 21). After matt's clarification in post #158 (Jun 3), trebor committed in post #159 (Jun 4) to a PR clarifying Example 3 in the EIP (Frame 1 should be a signature check by the canonical paymaster, not an on-chain ERC-20 balance read) |
 | Thomas Coratger | (not on GitHub directly in PR author list) | Co-author with vbuterin of EIP-8288 (PR #11772, opened Jun 5): Frame type for PQ sig and STARK aggregation. Lean Ethereum tooling contributor |
 | Milos Stankovic | @morph-dev | Author of PR #11814 (spec cleanup and clarifications, opened Jun 17): elides raw signature bytes from all sig hashes to restore arbitrary-signature-byte support and preserve aggregation compatibility, defaults `sig.signer` to `tx.sender`, makes the EXPIRY_VERIFIER first-frame mempool rule explicit |
+| Mislav Javor | @oxshaman | Lead author of ERC-8211 Smart Batching (ERC PR #1638); the proposal names EIP-8141 SENDER frames as a forward-compatibility execution transport, without taking it as a dependency |
+| Giulio Rebuffo | @Giulio2002 | Author of EIP-8202 Scheme-Agile Transactions (PR #11438, merged Apr 22) and its Falcon-512 support; raised the "smart wallet tax" critique of EIP-8141 in the Frame-vs-SchemedTransactions thread |
+| Dragan Rakita | @rakita | Author of EIP-8175 Composable Transaction (PR #11355, merged Mar 10), the flat-composition alternative to frame-based AA |
+| Chris Hunter | @chunter-cb | Author of EIP-8130 AA by Account Configuration (Coinbase/Base), EIP-8141's principal alternative; drove its June finalization burst |
+| nixorokish | @nixorokish | Hegotá meta-EIP PFI maintainer (PR #11786, Jun 9); host of the Svalbard native-AA breakout session |
+| pipavlo82 | pipavlo82 | EIP-8288 reviewer; raised omission accountability (posts #2-3, #6) and engaged vbuterin's hash-based-minimalism rationale on the PQ frame thread |
+| albert-garreta | albert_g | EIP-8288 reviewer; asked the SPHINCS-vs-lattice scheme-selection question (post #4) that vbuterin answered |
 
 ## External Resources
 
@@ -137,13 +146,19 @@
 - [Openfort: What EIP-8141 Means for Developers](https://www.openfort.io/blog/eip-8141-means-for-developers)
 - [FOCIL + Native Account Abstraction](https://ethereum-magicians.org/t/focil-native-account-abstraction/27999)
 - [AA-VOPS: A Pragmatic Path Towards Validity-Only Partial Statelessness](https://ethresear.ch/t/a-pragmatic-path-towards-validity-only-partial-statelessness-vops/22236#p-54075-vops-and-native-account-abstraction-aavops-9)
+- [Frame Transactions Through a Statelessness Lens](https://ethresear.ch/t/frame-transactions-through-a-statelessness-lens/24538)
 - [Frame vs Tempo — Two clashing philosophies of native AA](https://x.com/decentrek/status/2031013555898900838)
+- [EIP-8141 is Too Unopinionated (jxom)](https://x.com/_jxom/status/2043135281604464905)
 - [The case for Frame Transactions: Flexible Foundation with Powerful Defaults](https://x.com/decentrek/status/2036697881512701997)
 - [The Evolution of Self-Custody](https://x.com/pedrouid/status/2031716092112929107)
 - [Ethereum Wallet UX is changing](https://x.com/pedrouid/status/2042682070997033253)
 - [Let us be brave and extend EIP-8141 benefits](https://x.com/pedrouid/status/2051354277520515316)
 - [1 contract, 2 fields, 4 features](https://x.com/pedrouid/status/2054584429981659388)
 - [Frame Transactions and the Three Gates to Privacy](https://ethresear.ch/t/frame-transactions-and-the-three-gates-to-privacy/24666)
+- [Achieving Quantum Safety through Ephemeral Key Pairs and Account Abstraction](https://ethresear.ch/t/achieving-quantum-safety-through-ephemeral-key-pairs-and-account-abstraction/24273)
+- [Ethereum L1 Strawmap](https://strawmap.org/)
+- [Post-Quantum Ethereum](https://pq.ethereum.org/)
+- [Google: Cryptography Migration Timeline](https://blog.google/innovation-and-ai/technology/safety-security/cryptography-migration-timeline/)
 - [Your Ethereum Wallet is About to Change Forever](https://dorisgxyz.substack.com/p/your-ethereum-wallet-is-about-to)
 - [EIP-8141 Frame Transactions (HackMD)](https://hackmd.io/@dicethedev/HyhbyJA3bg)
 - [Frame Transactions vs. SchemedTransactions](https://ethereum-magicians.org/t/frame-transactions-vs-schemedtransactions-for-post-quantum-ethereum/28056)
@@ -151,6 +166,7 @@
 - [EIP-8272: Recent Roots for Frame Transactions](https://ethereum-magicians.org/t/eip-8272-recent-roots-for-frame-transactions/28621)
 - [EIP-8288: Frame type for PQ sig and STARK aggregation](https://ethereum-magicians.org/t/eip-frame-type-for-quantum-resistant-signature-and-stark-aggregation/28723)
 - [ERC-8286: Modular Accounts for Frame Transactions](https://ethereum-magicians.org/t/erc-8286-modular-accounts-for-frame-transactions/28695)
+- [ERC-8211: Smart Batching](https://ethereum-magicians.org/t/erc-8211-smart-batching/28135)
 - [Svalbard AA Breakout Session Notes](https://hackmd.io/@nixorokish/svalbard-aa-breakout)
 
 ## Competing Standards
