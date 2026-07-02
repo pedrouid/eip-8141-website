@@ -635,32 +635,44 @@ The Phase 19 watch item asked whether PR #11681 (absorb-into-base) would reorien
 
 **What to watch into Phase 21**: whether the EIP-8288 thread questions get an author response or spec revision; whether EIP-8288 merges; whether the next Hegotá update promotes any AA-stack EIPs to PFI; whether the stalled PR #11681 is retracted or rebased; whether trebor's Example 3 clarification lands; and whether a fifth sibling EIP appears.
 
-## Phase 21: Signatures-List Regression and Spec Cleanup (Jun 15 – Jun 24)
+## Phase 21: Signatures-List Regression and Spec Cleanup (Jun 15 – Jun 30)
 
-*The signatures-list refactor merged May 22 turns out to have dropped support for arbitrary signature bytes, breaking custom schemes like passkeys. The community surfaces it, matt acknowledges the regression, and two cleanup PRs open to fix it. On the PQ thread, vbuterin answers the scheme-selection question, resolving a Phase 20 watch item.*
+*The signatures-list refactor merged May 22 turns out to have dropped arbitrary signature bytes, breaking custom schemes like passkeys. The community surfaces it, matt acknowledges it and opens his own fix, and the first cleanup PR merges. EIP-2542 becomes the first EIP formally withdrawn as superseded by EIP-8141.*
 
 ### EIP-8288 Author Defends Hash-Based Minimalism (External)
 
 *vbuterin, pipavlo82 — [topic 28723](https://ethereum-magicians.org/t/eip-frame-type-for-quantum-resistant-signature-and-stark-aggregation/28723) posts #5-6, Jun 15 – Jun 17*
 
-vbuterin answers albert-garreta's Phase 20 question on why the PQ frame mode is drafted around SPHINCS rather than lattice schemes (#5, Jun 15): the base layer should stay purely hash-based to minimize dependencies and infrastructure maintenance, accepting the larger signature size as the cost. pipavlo82 accepts the rationale and revives the omission-accountability thread (#6, Jun 17), now proposing hash-only dependency receipts kept outside the core frame so future inclusion and omission checks need no base-layer complexity. The exchange resolves the Phase 20 watch item, an author did respond, without changing the spec; the omission question stays a mempool and builder concern deferred to FOCIL coordination.
+vbuterin answers albert-garreta's Phase 20 SPHINCS-vs-lattice question (#5, Jun 15): the base layer should stay purely hash-based to minimize dependencies and infrastructure maintenance, accepting larger signatures as the cost. pipavlo82 accepts the rationale (#6, Jun 17) and proposes hash-only dependency receipts kept outside the core frame for future omission checks. Resolves the Phase 20 watch item without changing the spec; omission accountability stays deferred to FOCIL coordination.
 
 ### Signatures-List Refactor Breaks Arbitrary Signature Bytes (Spec)
 
 *nlordell, DanielVF, matt — posts #161-164, Jun 15 – Jun 17*
 
-The signatures-list outer field (PR #11481, merged May 22) draws its first serious scrutiny. nlordell (#161, Jun 15) argues custom signature schemes like passkeys are under-supported: a signature must commit to the frame-tx hash, but that hash now includes the signatures list, creating a circular dependency. DanielVF (#162, Jun 16) and nlordell (#163) work out that VERIFY frame data is elided from the sig hash, so a signature can be computed and inserted afterward, but the same elision was not carried over to the new signatures list. matt (#164, Jun 17) acknowledges the merge dropped support for arbitrary signature bytes and commits to restoring it. This is the first confirmed regression from a merged 8141 PR, and it validates the cost of the fast merge tempo flagged in earlier phases.
+The signatures-list outer field (PR #11481, merged May 22) draws its first serious scrutiny. nlordell (#161, Jun 15) argues custom schemes like passkeys are under-supported: a signature must commit to the frame-tx hash, but that hash now includes the signatures list, a circular dependency. DanielVF (#162) and nlordell (#163) note VERIFY frame data is elided from the sig hash for exactly this reason, but the elision was not carried over to the new list. matt (#164, Jun 17) acknowledges the merge dropped arbitrary signature bytes and commits to restoring it. The first confirmed regression from a merged 8141 PR, validating the cost of the fast merge tempo flagged in earlier phases.
 
 ### Two Cleanup PRs Open to Fix the Regression (Spec)
 
 *nerolation — PR #11810; morph-dev — PR #11814, both Jun 17*
 
-matt's commitment lands as two PRs the same day. PR #11810 (nerolation, all reviewers approved) restores a Behavior section accidentally deleted in an earlier merge. PR #11814 (morph-dev, a new contributor) is the substantive cleanup: raw `sig.signature` bytes are elided from every sig hash, so signatures stay insertable after hashing and remain aggregatable for future PQ work; `sig.signer` defaults to `tx.sender` when empty; and the mempool rule that EXPIRY_VERIFIER must be the first frame is made explicit. morph-dev left several TODOs flagging open clarifications, so the PR reads as a cleanup pass rather than a finished fix. Neither has merged as of this sync.
+matt's commitment lands as two PRs the same day. PR #11810 (nerolation) restores a Behavior section accidentally deleted in an earlier merge; it merged June 26 with no debate. PR #11814 (morph-dev, a new contributor) is a broader cleanup: raw `sig.signature` bytes are elided from every sig hash, `sig.signer` defaults to `tx.sender` when empty, and the rule that EXPIRY_VERIFIER must be the first frame is made explicit. Rebased June 30 with a few TODOs still open; still awaiting an Author review.
+
+### Lightclient Re-Adds Arbitrary Signature Data (Spec)
+
+*lightclient — PR #11837, opened Jun 25*
+
+The regression's own author ships the substantive fix. PR #11837 (+44/-19) re-adds arbitrary signature data to the outer signatures list so custom verifiers can sign over the canonical hash and insert the signature afterward, breaking the circular dependency nlordell flagged in post #161. lightclient's description concedes he had cut the feature from #11481 at the last minute after convincing himself it was unneeded. It overlaps #11814's elision approach; how the two compose is the open question.
+
+### EIP-2542 Withdrawn as Superseded (External)
+
+*forshtat — PR #11773, merged Jun 30*
+
+EIP-2542 (2020, TXGASLIMIT/CALLGASLIMIT gas-introspection opcodes) is moved to Withdrawn with `withdrawal-reason: Superseded by EIP-8141`, since `TXPARAM`/`FRAMEPARAM` cover the use case. The first formal supersession of an older EIP by frame transactions, filed by an 8141 co-author.
 
 ### PR #11681 Stays Idle (Spec)
 
 *pedrouid — PR #11681, last activity May 18*
 
-No change: the absorb-into-base amendment remains idle past its one-month mark, while the compose-by-requires stack of four siblings continues to set the direction. The architectural question is unchanged from Phase 20.
+No change: the absorb-into-base amendment remains idle while the compose-by-requires sibling stack sets the direction; the architectural question is unchanged from Phase 20.
 
-**What to watch into Phase 22**: whether PRs #11810 and #11814 merge and fully restore arbitrary-signature-byte support; whether morph-dev's TODOs trigger further spec questions; whether EIP-8288 gets an EIP number and merges; whether trebor's Example 3 clarification lands; whether the next Hegotá update promotes any AA-stack EIP to PFI; whether ERC-8286 (the first ERC built on EIP-8141) advances toward editor review; and whether a fifth sibling EIP appears.
+**What to watch into Phase 22**: whether #11837 and #11814 merge, and which carries the signatures fix; whether EIP-8288 clears editorial review and merges; whether trebor's Example 3 clarification lands; whether the next Hegotá update promotes any AA-stack EIP to PFI; whether ERC-8286 advances past its CI failures toward editor review; and whether a fifth sibling EIP appears.

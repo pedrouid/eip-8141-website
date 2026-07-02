@@ -4,7 +4,7 @@
 
 ## Structural Comparison
 
-| Aspect | Original (Jan 29) | Latest (May 22) |
+| Aspect | Original (Jan 29) | Latest (Jun 26) |
 |---|---|---|
 | **Opcodes** | `APPROVE`, `TXPARAMLOAD`, `TXPARAMSIZE`, `TXPARAMCOPY` (4) | `APPROVE`, `TXPARAM`, `FRAMEDATALOAD`, `FRAMEDATACOPY`, `FRAMEPARAM` (5) |
 | **APPROVE mechanism** | Return codes 0-4 at top-level frame | Transaction-scoped with scope operand (0x1, 0x2, 0x3), callable at any depth, double-approval prevention |
@@ -89,7 +89,7 @@ The original spec deliberately had no `value` field in frames, on the principle 
 
 ## Active Proposals That May Change the Comparison
 
-As of June 25, 2026, several open PRs propose changes that would extend this comparison table:
+As of July 2, 2026, several open PRs propose changes that would extend this comparison table:
 
 | Proposal | PR | Impact |
 |---|---|---|
@@ -97,5 +97,6 @@ As of June 25, 2026, several open PRs propose changes that would extend this com
 | **Guarantors** | [#11555](https://github.com/ethereum/EIPs/pull/11555) | Would introduce a "guarantor" payer that pays even if sender validation fails, letting mempool nodes skip sender simulation and admit shared-state-reading VERIFY frames |
 | **Payer approves before sender** | [#11580](https://github.com/ethereum/EIPs/pull/11580) | Alternative to #11555: relaxes the ordering rule so a payer can approve before the sender, letting a payer commit to gas without simulating sender validation. Briefly auto-merged as #11575 on Apr 28 and reverted by #11579 on Apr 29; reopened as a draft |
 | **Extend with Guarantors, Flexible Nonces, and Signer Binding** | [#11681](https://github.com/ethereum/EIPs/pull/11681) | Pedro Gomes's +810/-74 bundle folding guarantors (#11555), keyed nonces (EIP-8250-equivalent), and signer binding (EIP-8164-equivalent) into EIP-8141 via one `signer` envelope field and an `AUTH_MANAGER` system contract. Successor to the closed PR #11643 after PR #11662 (EXPIRY_VERIFIER) settled the expiry design as a verifier-frame contract; inverts the requires-chain layering that EIP-8250 established by absorbing the keyed-nonce and signer-binding features into EIP-8141 itself |
+| **Arbitrary signature data** | [#11837](https://github.com/ethereum/EIPs/pull/11837) / [#11814](https://github.com/ethereum/EIPs/pull/11814) | Would restore arbitrary signature bytes in the outer signatures list (regressed by #11481), so custom verifiers can sign over the canonical hash and insert signatures afterward |
 | **Frame returndata opcodes** | Under discussion (post #137) | Proposed `FRAMERETURNDATASIZE`/`FRAMERETURNDATACOPY` to enable multi-step flows, no PR yet |
 

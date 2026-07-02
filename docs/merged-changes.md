@@ -465,9 +465,24 @@ The EthMagicians thread ([topic 28621](https://ethereum-magicians.org/t/eip-8272
 
 ---
 
+## Behavior Section Restored and EIP-2542 Withdrawn — June 26 and 30, 2026
+
+Two merges closed out June: one restoring spec text lost in the signatures-list refactor, one marking the first formal supersession of an older proposal by EIP-8141.
+
+### PR #11810: Restore Behavior section (merged June 26)
+
+**Author**: nerolation (Toni Wahrstätter). Merged June 26 after sitting fully approved since June 17.
+
+- **What**: +23/-0, re-adds the `APPROVE` Behavior subsection accidentally deleted by the signatures-list refactor (PR #11481, merged May 22). The restored text defines per-scope semantics: `APPROVE_EXECUTION` requires `resolved_target == tx.sender` and sets `sender_approved`; `APPROVE_PAYMENT` requires prior sender approval and sufficient payer balance, increments the sender's nonce, and collects the transaction's maximum cost from the payer; `APPROVE_EXECUTION_AND_PAYMENT` combines both, with double-approval reverts throughout.
+- **Why it matters**: no semantic change beyond restoration, but it completes the first half of the June 17 cleanup pair (with PR #11814) that followed matt's commitment in magicians post #164 after the signatures-list regression. lightclient signed off June 17; nerolation triggered the merge bot June 26.
+
+### PR #11773: EIP-2542 moved to Withdrawn (merged June 30)
+
+**Author**: forshtat (Alex Forshtat, an EIP-8141 co-author). Not a change to EIP-8141 itself, but a governance signal worth recording: EIP-2542 (TXGASLIMIT and CALLGASLIMIT opcodes, a 2020 proposal for transaction and frame gas-limit introspection) was moved to Withdrawn with the header `withdrawal-reason: Superseded by EIP-8141`. Frame transactions expose the same information through `TXPARAM`/`FRAMEPARAM` introspection, covering the use case the old opcodes targeted. This is the first EIP formally withdrawn in favor of EIP-8141.
+
 ## Active/Open PRs
 
-*As of June 25, 2026.* These PRs represent active design proposals that may change the spec in the near future.
+*As of July 2, 2026.* These PRs represent active design proposals that may change the spec in the near future.
 
 ### PR #11482: Allow using precompiles for VERIFY frames (open since Apr 2)
 
@@ -538,25 +553,17 @@ From pedrouid's PR description:
 **Authors**: vbuterin (Vitalik Buterin), Thomas Coratger
 
 - **Why**: Post-quantum signature schemes (lattice-based, hash-based) cost ~150-200k gas each to verify and weigh 2-3 kB on the wire. STARK proofs are even worse (128-512 kB on-wire, millions of gas to verify). Including these directly per transaction makes privacy protocols impractical and incompatible with FOCIL and Frame Transactions. EIP-8288 lets transactions declare lightweight `(scheme, data_hash, verification_key)` dependencies that get aggregated off-chain into a single recursive STARK at the block level.
-- **Proposed change**: New sibling EIP (placeholder `eip-9999.md`, +508 lines) requiring `2718, 2929, 2930, 7702, 8141`. Three moving pieces:
+- **Proposed change**: New sibling EIP (`eip-8288.md`, +508 lines) requiring `2718, 2929, 2930, 7702, 8141`. Three moving pieces:
   - **New frame mode `DEP_VERIFY_FRAME_MODE = 3`**: declares a set of dependencies as `(scheme, data_hash, verification_key)` triples (96 bytes each, up to `MAX_DEPENDENCIES_PER_FRAME = 256`). These are not executed as EVM code; they are recorded for the block-level recursive proof. The schemes are `LEANSPHINCS_SCHEME = 0x10` and `LEANSTARK_SCHEME = 0x11` (Lean Ethereum hash-based signatures and STARK proofs respectively, with gas constants `3000` and `30000`).
   - **Block-header field `recursive_stark`**: new top-level header entry `[stark_proof, block_deps_hash]`. Block validity requires the single recursive STARK proves all declared dependencies; `block_deps_hash` commits to the concatenation of all dependency triples. `AGGREGATED_VK` is the fixed verifying key for the recursive scheme.
   - **EVM introspection**: dependencies are visible during execution via existing EIP-8141 `FRAMEPARAM` / `FRAMEDATASIZE` / `FRAMEDATACOPY` opcodes, so contracts can iterate dependency frames and read declared triples. Per-tx caps: `MAX_SIGS_PER_TX = 16`, `MAX_STARKS_PER_TX = 1`.
 - **Mempool wrapper**: introduces a wrapper format that bundles transactions with their dependencies and witnesses, with recursive aggregation supported at the mempool layer so nodes can combine proofs to reduce gossip bandwidth. Explicitly compatible with FOCIL (EIP-7805).
 - **Significance**: fourth compose-by-requires sibling EIP after EIP-8250, EIP-8266, EIP-8272. First sibling to add a new frame mode (a structural extension to EIP-8141's mode enum, not just an opcode or system contract), and first to introduce a new top-level block-header field. Authored by Vitalik Buterin directly and Thomas Coratger (new contributor), bringing the sibling-author roster beyond the soispoke/nerolation/lightclient cluster. Strategically, the design positions Frame Transactions as the protocol-layer carrier for Ethereum's post-quantum signature transition and for STARK-based privacy/L2 settlement, both load-bearing for the next-major-fork roadmap.
-- **Status**: Open since June 5. EIP number 8288 is reserved via the EthMagicians thread title but not yet committed to the file (still `eip-9999.md` placeholder pending editor assignment). All reviewers approved via auto-bot. abcoathup left clarifying comments through June 15. EthMagicians thread at [topic 28723](https://ethereum-magicians.org/t/eip-frame-type-for-quantum-resistant-signature-and-stark-aggregation/28723) (6 posts): vbuterin answered the SPHINCS-vs-lattice question in post #5 (Jun 15), defending a purely hash-based base layer; pipavlo82 followed in post #6 (Jun 17) proposing hash-only dependency receipts to address omission accountability.
+- **Status**: Open since June 5. The file is now committed as `eip-8288.md` (the `eip-9999.md` placeholder was renamed). abcoathup left clarifying comments through June 15, derekchiang reviewed June 22, and EIP editor jochem-brouwer requested editorial changes June 30 ("Exciting EIP"), putting it one editorial pass from merge. EthMagicians thread at [topic 28723](https://ethereum-magicians.org/t/eip-frame-type-for-quantum-resistant-signature-and-stark-aggregation/28723) (6 posts): vbuterin answered the SPHINCS-vs-lattice question in post #5 (Jun 15), defending a purely hash-based base layer; pipavlo82 followed in post #6 (Jun 17) proposing hash-only dependency receipts to address omission accountability.
 
 From vbuterin's PR description:
 
 > Adds a frame type for quantum-resistant Signature and STARK Aggregation. This supports signatures and STARKs (for privacy or for eg. L2s) in a post-quantum world in a highly gas-efficient way, by providing a way for transactions to declare them as "dependencies", in a way that allows the mempool and the block builder to replace them with a recursive STARK proving that they all exist.
-
-### PR #11810: Restore Behavior section (open since June 17)
-
-**Author**: nerolation
-
-- **Why**: The signatures-list refactor (PR #11481, merged May 22) accidentally deleted the spec's Behavior section. This PR restores it.
-- **Proposed change**: +23/-0, re-adds the deleted prose with no semantic change beyond restoration.
-- **Status**: All reviewers approved (lightclient signed off); awaiting merge. Part of the June 17 cleanup pair with PR #11814, following matt's commitment in magicians post #164 to restore the regressed signature behavior.
 
 ### PR #11814: Spec cleanup and clarifications (open since June 17)
 
@@ -568,7 +575,19 @@ From vbuterin's PR description:
   - `sig.signer` may be empty and defaults to `tx.sender`.
   - Mempool: the EXPIRY_VERIFIER frame may only be the first frame in the frame list.
   - Moves several sections to more appropriate locations.
-- **Status**: Open; requires one more Author review. morph-dev left several `TODO` markers flagging clarifications to resolve before merge, so this is a cleanup pass rather than a finished fix.
+- **Status**: Open; requires one more Author review. morph-dev left several `TODO` markers flagging clarifications to resolve before merge, so this is a cleanup pass rather than a finished fix. Rebased June 30 with morph-dev reporting most TODOs resolved and a few remaining.
+
+### PR #11837: Allow arbitrary signature data for custom verifiers (open since June 25)
+
+**Author**: lightclient
+
+- **Why**: The substantive fix for the signatures-list regression (PR #11481, magicians posts #161-164). Custom verifiers need to sign over the canonical signing hash, but the merged signatures list committed raw signature bytes into that hash, creating the circular dependency nlordell flagged in post #161.
+- **Proposed change** (+44/-19): re-adds arbitrary signature data to the outer signatures list, with tweaks to the original idea, so a signature can be computed over the canonical hash and inserted afterward.
+- **Status**: Open; eth-bot reports all reviewers approved. Overlaps PR #11814's sig-hash elision approach; how the two compose, or which supersedes, is the open question for the next sync.
+
+From lightclient's PR description:
+
+> I originally intended for this to be in #11481, but at the last minute somehow convinced myself it was unneeded. We realized it is actually required if we want to allow custom verifiers to be able to use the canonical signing hash. I have re-added it here, plus a few tweaks to original idea.
 
 ---
 

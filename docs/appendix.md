@@ -49,6 +49,7 @@
 | May 22 | [#11692](https://github.com/ethereum/EIPs/pull/11692) | nerolation | Add EIP-8266: Expiring Nonces for Frame Transactions (sibling EIP whose `requires` includes EIP-8141 and EIP-8250). Second EIP in the compose-by-requires AA stack |
 | Jun 1 | [#11749](https://github.com/ethereum/EIPs/pull/11749) | soispoke | Update EIP-8250: Add support for nonce key sets (generalizes single keyed nonce to a bounded key set; +64/-40). First post-merge revision to any sibling EIP |
 | Jun 5 | [#11726](https://github.com/ethereum/EIPs/pull/11726) | soispoke, vbuterin, nerolation | Add EIP-8272: Recent Roots for Frame Transactions (sibling EIP, +394 lines). Third compose-by-requires sibling requiring both EIP-7843 and EIP-8141. New `recent_root_references` outer-envelope field, `RECENT_ROOT_ADDRESS` system contract with 8192-slot ring, new opcode `RECENTROOTREFLOAD (0xB4)` |
+| Jun 26 | [#11810](https://github.com/ethereum/EIPs/pull/11810) | nerolation | Restore the `APPROVE` Behavior section accidentally deleted by the signatures-list merge (#11481); +23/-0, no semantic change beyond restoration |
 
 ### Open
 
@@ -58,9 +59,9 @@
 | Apr 22 | [#11555](https://github.com/ethereum/EIPs/pull/11555) | derekchiang | Add support for guarantors (payer covers gas even if sender validation fails) |
 | Apr 29 | [#11580](https://github.com/ethereum/EIPs/pull/11580) | lightclient | Allow payer to approve before sender (draft; alternative to #11555 guarantors) |
 | May 16 | [#11681](https://github.com/ethereum/EIPs/pull/11681) | pedrouid | Extend EIP-8141 with guarantors, keyed nonces, and signer binding via a `signer` envelope field and an `AUTH_MANAGER` system contract; +810/-74 lines. Successor to closed #11643 after PR #11662 settled the expiry design |
-| Jun 5 | [#11772](https://github.com/ethereum/EIPs/pull/11772) | vbuterin, Thomas Coratger | Add EIP-8288 (proposed): Frame type for PQ sig and STARK aggregation (`eip-9999.md` placeholder, +508 lines). Fourth compose-by-requires sibling EIP. New `DEP_VERIFY_FRAME_MODE = 3` frame mode declaring `(scheme, data_hash, verification_key)` dependencies; block-level `recursive_stark` header field aggregates them into one recursive STARK proof. Lean Ethereum tooling: `LEANSPHINCS_SCHEME` and `LEANSTARK_SCHEME` |
-| Jun 17 | [#11810](https://github.com/ethereum/EIPs/pull/11810) | nerolation | Restore the Behavior section accidentally deleted by the signatures-list merge (#11481); +23/-0, all reviewers approved, awaiting merge |
-| Jun 17 | [#11814](https://github.com/ethereum/EIPs/pull/11814) | morph-dev | Spec cleanup: elide raw `sig.signature` bytes from all sig hashes (restores arbitrary-signature-byte support regressed by #11481, preserves aggregation compatibility), `sig.signer` defaults to `tx.sender`, EXPIRY_VERIFIER must be first frame; +103/-73, several TODOs remain |
+| Jun 5 | [#11772](https://github.com/ethereum/EIPs/pull/11772) | vbuterin, Thomas Coratger | Add EIP-8288: Frame type for PQ sig and STARK aggregation (`eip-8288.md`, +508 lines). Fourth compose-by-requires sibling EIP. New `DEP_VERIFY_FRAME_MODE = 3` frame mode declaring `(scheme, data_hash, verification_key)` dependencies; block-level `recursive_stark` header field aggregates them into one recursive STARK proof. Lean Ethereum tooling: `LEANSPHINCS_SCHEME` and `LEANSTARK_SCHEME`. Editorial review by jochem-brouwer Jun 30 |
+| Jun 17 | [#11814](https://github.com/ethereum/EIPs/pull/11814) | morph-dev | Spec cleanup: elide raw `sig.signature` bytes from all sig hashes (restores arbitrary-signature-byte support regressed by #11481, preserves aggregation compatibility), `sig.signer` defaults to `tx.sender`, EXPIRY_VERIFIER must be first frame; +103/-73, rebased Jun 30 with a few TODOs remaining |
+| Jun 25 | [#11837](https://github.com/ethereum/EIPs/pull/11837) | lightclient | Allow arbitrary signature data in the outer signatures list so custom verifiers can sign over the canonical hash (fixes the #11481 circular-dependency regression); +44/-19, all reviewers approved |
 
 ### Related
 
@@ -72,7 +73,7 @@
 | Apr 22 | [#11438](https://github.com/ethereum/EIPs/pull/11438) | Giulio2002 | Add EIP-8202: Scheme-Agile Transactions (alternative AA proposal; PQ signatures on L1 without general AA) |
 | Apr 25 | [#11571](https://github.com/ethereum/EIPs/pull/11571) | SirSpudlington | Update EIP-7932: refactor signature registry to be friendlier to EIP-8141 (rename `sigrecover` → `sigaddress`, add `sigverify`/`sigcosts` precompiles for AA use cases) |
 | Jun 3 | [#1794](https://github.com/ethereum/ERCs/pull/1794) | chiranjeev13 | Add ERC-8286: Modular Accounts for Frame Transactions (ERCs repo). Defines how ERC-7579 modular accounts implement the EIP-8141 validation flow; first application-layer standard built on EIP-8141 |
-| Jun 5 | [#11773](https://github.com/ethereum/EIPs/pull/11773) | forshtat | Move EIP-2542 to Withdrawn, superseded by EIP-8141 (first external AA proposal formally withdrawn in favor of frame transactions) |
+| Jun 30 | [#11773](https://github.com/ethereum/EIPs/pull/11773) | forshtat | Move EIP-2542 to Withdrawn, superseded by EIP-8141 (merged Jun 30; first EIP formally withdrawn in favor of frame transactions) |
 
 ### Closed (not merged)
 

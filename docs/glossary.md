@@ -218,6 +218,8 @@ Proposals EIP-8141 depends on, supersedes, or interacts with. For full context o
 
 **[EIP-2718](https://eips.ethereum.org/EIPS/eip-2718)** — Typed transaction envelope. EIP-8141 is transaction type `0x06`. The type-byte sighash prefix (PR #11544) follows the EIP-2718 convention.
 
+**[EIP-2542](https://eips.ethereum.org/EIPS/eip-2542)** — 2020 proposal for `TXGASLIMIT`/`CALLGASLIMIT` gas-introspection opcodes. Moved to Withdrawn with `withdrawal-reason: Superseded by EIP-8141` (PR #11773, merged Jun 30, 2026), since `TXPARAM`/`FRAMEPARAM` cover the use case. The first EIP formally withdrawn in favor of frame transactions.
+
 **[EIP-3074](https://eips.ethereum.org/EIPS/eip-3074)** — `AUTH`/`AUTHCALL` opcodes giving EOAs the ability to delegate authorization to contracts. Never shipped; its design principles feed into EIP-8141.
 
 **[EIP-3607](https://eips.ethereum.org/EIPS/eip-3607)** — Rejects transactions from senders that have deployed code. Conflicted with frame transactions allowing contract-account senders; [PR #11272](https://github.com/ethereum/EIPs/pull/11272) (merged May 5, 2026) added EIP-3607 to the `requires` header with an explicit carve-out: the origination check does not apply to frame transactions, while non-frame transaction validation is unchanged.
@@ -244,7 +246,7 @@ Proposals EIP-8141 depends on, supersedes, or interacts with. For full context o
 
 **[EIP-8272 (Recent Roots)](https://eips.ethereum.org/EIPS/eip-8272)** — Third sibling EIP (`requires` EIP-7843 and EIP-8141). Adds the `recent_root_references` field, the `RECENT_ROOT_ADDRESS` contract, and the `RECENTROOTREFLOAD` opcode so validation can check application-state roots without reading mutable storage (PR #11726 merged Jun 5).
 
-**[EIP-8288 (PQ frame mode)](https://ethereum-magicians.org/t/eip-frame-type-for-quantum-resistant-signature-and-stark-aggregation/28723)** — Fourth sibling EIP, pending (PR #11772 opened Jun 5, still an `eip-9999.md` placeholder). Adds frame mode `DEP_VERIFY_FRAME_MODE = 3` and a block-header `recursive_stark` field for post-quantum signature and STARK aggregation.
+**[EIP-8288 (PQ frame mode)](https://ethereum-magicians.org/t/eip-frame-type-for-quantum-resistant-signature-and-stark-aggregation/28723)** — Fourth sibling EIP, pending (PR #11772 opened Jun 5, now committed as `eip-8288.md`; editorial review Jun 30). Adds frame mode `DEP_VERIFY_FRAME_MODE = 3` and a block-header `recursive_stark` field for post-quantum signature and STARK aggregation.
 
 **[EIP-7951](https://eips.ethereum.org/EIPS/eip-7951)** — P256 precompile. EIP-8141 default code relies on it for passkey/WebAuthn signature verification.
 
