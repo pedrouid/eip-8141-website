@@ -266,7 +266,7 @@ All reviewers approved by Apr 18; auto-merged on Apr 22 with no further debate.
 **Author**: lightclient | **Merged**: Apr 29
 
 - **Why**: PR #11395 (Mar 25) introduced atomic batching at the frame-list level, and PR #11534 (Apr 16) added a per-frame `value` field. Together they cover the multi-call and ETH-transfer use cases that the default-code SENDER path was originally added to handle.
-- **Change**: Default code's `SENDER` mode now simply reverts. The previous logic (which decoded `frame.data` as RLP `[[target, value, data], ...]` when `resolved_target == tx.sender`, and returned successfully with empty data when `resolved_target != tx.sender`) is removed. Net diff: +2/-15.
+- **Change**: Default code's `SENDER` mode now simply reverts. The previous logic (which decoded `frame.data` as RLP `[[target, value, data], ...]` when `resolved_target == tx.sender`, and returned successfully with empty data when `resolved_target != tx.sender`) is removed. Net diff: +2/-15. This revert behavior was later superseded by PR #11621.
 - Auto-merged after all reviewers approved; no review debate.
 
 ### PRs #11575 / #11579: Allow payer to approve before sender (merged in error, reverted same window)
@@ -482,7 +482,7 @@ Two merges closed out June: one restoring spec text lost in the signatures-list 
 
 ---
 
-## Signature-List Repair and Cleanup - July 6-7, 2026
+## Signature-List Repair and Cleanup — July 6-7, 2026
 
 Three July merges fixed the June signatures-list regression in the base spec. The current model is no longer "VERIFY data is elided"; frame data stays signed, raw signature bytes with empty `msg` are elided, and custom verifier witnesses live in `ARBITRARY` signature entries exposed through `SIGPARAM`.
 
@@ -507,7 +507,7 @@ Three July merges fixed the June signatures-list regression in the base spec. Th
 **Author**: morph-dev (Milos Stankovic)
 
 - **Why**: Completes the signatures-list cleanup and resolves several public-mempool ambiguities that accumulated during the May-June merge tempo.
-- **What** (+125/-111): signature entries use `scheme`; empty `signer` defaults to `tx.sender` for protocol-validated schemes; default code requires a `SECP256K1` signature at `tx.signatures[0]`; expiry-verifier frames may appear only first; public-mempool rules require scope-matching flags, count intrinsic signature validation under `MAX_VERIFY_GAS`, and forbid `VERIFY` after the validation prefix.
+- **What** (+125/-111): signature entries use `scheme`; empty `signer` defaults to `tx.sender` for protocol-validated schemes; default code requires a `SECP256K1` signature at `tx.signatures[0]`; public-mempool expiry-verifier frames may appear only first; public-mempool rules require scope-matching flags, count intrinsic signature validation under `MAX_VERIFY_GAS`, and forbid `VERIFY` after the validation prefix.
 - **ERC-20 example correction**: public sponsors no longer check the user's ERC-20 balance onchain during validation. They check signature/frame metadata and accept the frontrunning risk that the user can drain token balance before inclusion.
 - **Why it matters**: turns the Phase 21 open question into settled spec text. The outer signatures list is now a concrete protocol surface with three scheme values, default-code index semantics, and explicit `SIGPARAM` introspection.
 

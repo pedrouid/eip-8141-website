@@ -37,7 +37,7 @@
 | Apr 22 | [#11544](https://github.com/ethereum/EIPs/pull/11544) | derekchiang | Mix in FRAME_TX_TYPE to sighash (EIP-2718 cross-type replay fix) |
 | Apr 28 | [#11575](https://github.com/ethereum/EIPs/pull/11575) | lightclient | Allow payer to approve before sender (auto-merged in error; reverted by #11579 same window, reopened as draft #11580) |
 | Apr 29 | [#11579](https://github.com/ethereum/EIPs/pull/11579) | lightclient | Revert #11575 |
-| Apr 29 | [#11577](https://github.com/ethereum/EIPs/pull/11577) | lightclient | Remove RLP call batch from default account (default-code `SENDER` mode now reverts) |
+| Apr 29 | [#11577](https://github.com/ethereum/EIPs/pull/11577) | lightclient | Remove RLP call batch from default account (temporarily made default-code `SENDER` mode revert, later relaxed by #11621) |
 | Apr 30 | [#11567](https://github.com/ethereum/EIPs/pull/11567) | derekchiang | Relax mempool deploy-frame rule (drops EIP-7997 from requires; any stateless factory qualifies; CREATE/SETDELEGATE join CREATE2 in deploy-frame carve-out) |
 | Apr 30 | [#11537](https://github.com/ethereum/EIPs/pull/11537) | dionysuzx | Add EIP-8141 to CFI in EIP-8081 Hegotá meta EIP (governance) |
 | May 5 | [#11272](https://github.com/ethereum/EIPs/pull/11272) | Thegaram | Disable EIP-3607 origination check for frame transactions (adds 3607 to `requires` with explicit carve-out) |
@@ -52,7 +52,7 @@
 | Jun 26 | [#11810](https://github.com/ethereum/EIPs/pull/11810) | nerolation | Restore the `APPROVE` Behavior section accidentally deleted by the signatures-list merge (#11481); +23/-0, no semantic change beyond restoration |
 | Jul 6 | [#11837](https://github.com/ethereum/EIPs/pull/11837) | lightclient | Add `ARBITRARY` signature scheme, `SIGPARAM (0xb4)`, and raw signature-byte elision for empty-`msg` signatures so custom verifiers can sign the canonical hash |
 | Jul 6 | [#11870](https://github.com/ethereum/EIPs/pull/11870) | lightclient | Clarify exceptional halts outside frame transactions and charge intrinsic gas for actual frame/signature data plus signature-validation cost |
-| Jul 7 | [#11814](https://github.com/ethereum/EIPs/pull/11814) | morph-dev | Spec cleanup: default code uses `tx.signatures[0]`, signer defaults to `tx.sender`, expiry frame must be first, mempool flags must match approval scope, no VERIFY after validation prefix |
+| Jul 7 | [#11814](https://github.com/ethereum/EIPs/pull/11814) | morph-dev | Spec cleanup: default code uses `tx.signatures[0]`, signer defaults to `tx.sender`, public-mempool expiry frames must be first, mempool flags must match approval scope, no VERIFY after validation prefix |
 
 ### Open
 
@@ -127,7 +127,7 @@
 | Sam Wilson | @SamWilsn | EIP editor; spec-coherence review (post #149, May 8) on naming, empty-target representation, opcode-budget, and `FRAMEDATACOPY` revert semantics |
 | trebor | @trebor | Privacy-focused paymaster researcher (Kohaku); raised the Example 3 (ERC-20 paymaster) feasibility question in posts #156-157 (May 21). After matt's clarification in post #158 (Jun 3), trebor committed in post #159 (Jun 4) to a PR clarifying Example 3 in the EIP (Frame 1 should be a signature check by the canonical paymaster, not an on-chain ERC-20 balance read) |
 | Thomas Coratger | (not on GitHub directly in PR author list) | Co-author with vbuterin of EIP-8288 (PR #11772, opened Jun 5): Frame type for PQ sig and STARK aggregation. Lean Ethereum tooling contributor |
-| Milos Stankovic | @morph-dev | Author of PR #11814 (spec cleanup and clarifications, merged Jul 7): default-code index-0 signature rule, signer defaulting to `tx.sender`, expiry-first rule, validation-prefix flag matching, and ERC-20 sponsor clarification |
+| Milos Stankovic | @morph-dev | Author of PR #11814 (spec cleanup and clarifications, merged Jul 7): default-code index-0 signature rule, public-mempool expiry-first rule, signer defaulting to `tx.sender`, validation-prefix flag matching, and ERC-20 sponsor clarification |
 | Mislav Javor | @oxshaman | Lead author of ERC-8211 Smart Batching (ERC PR #1638); the proposal names EIP-8141 SENDER frames as a forward-compatibility execution transport, without taking it as a dependency |
 | Giulio Rebuffo | @Giulio2002 | Author of EIP-8202 Scheme-Agile Transactions (PR #11438, merged Apr 22) and its Falcon-512 support; raised the "smart wallet tax" critique of EIP-8141 in the Frame-vs-SchemedTransactions thread |
 | Dragan Rakita | @rakita | Author of EIP-8175 Composable Transaction (PR #11355, merged Mar 10), the flat-composition alternative to frame-based AA |

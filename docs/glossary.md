@@ -96,7 +96,7 @@ A reference for the jargon that appears across this site. Entries are grouped by
 
 ## Frame modes and opcodes
 
-**DEFAULT (mode 0)** — A frame called from `ENTRY_POINT` with regular-call semantics. Used positionally: first frame for account deployment (target = deterministic deployer), last frame for paymaster post-op refunds. Default code reverts in this mode; only deployed contracts take DEFAULT frames.
+**DEFAULT (mode 0)** — A frame called from `ENTRY_POINT` with regular-call semantics. Used positionally: first frame for account deployment through any factory satisfying the deploy-frame trace rules, and last frame for paymaster post-op refunds. For codeless targets, default code returns with empty data; deployed contracts can also implement DEFAULT frames.
 
 **DEP_VERIFY (mode 3)** — `DEP_VERIFY_FRAME_MODE = 3`, a frame mode proposed by EIP-8288 (pending, PR #11772). Declares `(scheme, data_hash, verification_key)` dependency triples for block-level recursive-STARK aggregation instead of executing EVM code.
 
@@ -196,13 +196,17 @@ A reference for the jargon that appears across this site. Entries are grouped by
 
 **Keystore** — An L1 registry that stores multiple keys (passkeys, hardware, backup, session) for a given user and answers "can key X sign for user Y?" Complementary to frame transactions: frames handle per-transaction validation; keystores handle cross-chain identity persistence. EIP-8141 does not include a keystore.
 
-**Public ERC-20 sponsor** {#public-erc-20-sponsor} — An EIP-8141 non-canonical paymaster pattern where the sponsor's VERIFY frame checks sponsor authorization data and inspects the next SENDER frame for an ERC-20 transfer of the right shape. It does not read the user's token balance during validation, so it can propagate through the restrictive public mempool subject to `MAX_PENDING_TXS_USING_NON_CANONICAL_PAYMASTER = 1`. Trust model: the sponsor absorbs frontrunning risk because the user can drain the token balance before inclusion. Independent of ERC-4337.
+<span id="public-erc-20-sponsor"></span>
+
+**Public ERC-20 sponsor** — An EIP-8141 non-canonical paymaster pattern where the sponsor's VERIFY frame checks sponsor authorization data and inspects the next SENDER frame for an ERC-20 transfer of the right shape. It does not read the user's token balance during validation, so it can propagate through the restrictive public mempool subject to `MAX_PENDING_TXS_USING_NON_CANONICAL_PAYMASTER = 1`. Trust model: the sponsor absorbs frontrunning risk because the user can drain the token balance before inclusion. Independent of ERC-4337.
 
 **Modular account** — A smart account whose validation and execution logic is composed from pluggable modules (validators, executors, hooks), standardized by ERC-7579 and ERC-6900. ERC-8286 defines how such accounts implement EIP-8141 frame validation.
 
 **Paymaster** — A contract that pays gas on behalf of a transaction's sender. In ERC-4337, paymasters implement a `validatePaymasterUserOp` interface and are gated by the EntryPoint. In EIP-8141, paymasters are plain contracts targeted by a VERIFY frame with payment scope; the canonical paymaster is a runtime-code-recognized ETH-funded variant. ERC-20 repayment is non-canonical and splits between [public risk-accepting sponsors](#public-erc-20-sponsor) and [trustless balance-checking sponsors](#trustless-erc-20-balance-checking-sponsor).
 
-**Trustless ERC-20 balance-checking sponsor** {#trustless-erc-20-balance-checking-sponsor} — An EIP-8141 paymaster pattern where a self-contained on-chain contract uses frame introspection and ERC-20 storage reads to confirm the user can repay before approving payment. No off-chain service participates, and the sponsor does not accept balance-drain risk. Because validation reads external token storage, this exceeds the restrictive-tier rule `storage reads only on tx.sender` and does not propagate through the public mempool; it routes through the expansive tier, a private mempool, or direct-to-builder submission. Independent of ERC-4337.
+<span id="trustless-erc-20-balance-checking-sponsor"></span>
+
+**Trustless ERC-20 balance-checking sponsor** — An EIP-8141 paymaster pattern where a self-contained on-chain contract uses frame introspection and ERC-20 storage reads to confirm the user can repay before approving payment. No off-chain service participates, and the sponsor does not accept balance-drain risk. Because validation reads external token storage, this exceeds the restrictive-tier rule `storage reads only on tx.sender` and does not propagate through the public mempool; it routes through the expansive tier, a private mempool, or direct-to-builder submission. Independent of ERC-4337.
 
 **Relayer** — A third-party service that accepts signed user operations off-chain and submits them on-chain. EIP-8141 argues the role is structurally reduced because validation runs in-protocol: privacy rebroadcasters and trustless ERC-20 balance-checking sponsors are expressible as onchain contracts that route through the expansive tier or private mempool, while public ERC-20 sponsors can propagate through the restrictive mempool by accepting frontrunning risk.
 

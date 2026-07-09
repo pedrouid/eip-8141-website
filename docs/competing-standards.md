@@ -4,7 +4,7 @@
 
 ## TL;DR
 
-Five general-purpose proposals sit on a spectrum from maximum generality (EIP-8141: arbitrary EVM in VERIFY frames) to maximum constraint (EIP-XXXX/Tempo: fixed UX primitives, no programmable validation). EIP-8141 and EIP-8130 are the two most active, both fully PQ-ready through different mechanisms: arbitrary account code vs. authenticator contracts. EIP-8130 wins on mempool simplicity and performance; EIP-8141 wins on expressiveness and EOA defaults. Complementary proposals cover static sponsorship, shielded gas funding, and PQ-safe address derivation, composing with a general-purpose design rather than replacing it.
+Five general-purpose proposals sit between maximum generality (EIP-8141: arbitrary EVM in VERIFY frames) and maximum constraint (Tempo-like: fixed UX primitives, no programmable validation). EIP-8141 and EIP-8130 are the most active and both PQ-ready: EIP-8130 wins on mempool simplicity; EIP-8141 wins on expressiveness and EOA defaults. Static sponsorship, shielded gas funding, and PQ-safe address derivation are complementary, not replacements.
 
 ---
 
@@ -12,8 +12,8 @@ Five general-purpose proposals sit on a spectrum from maximum generality (EIP-81
 
 "Competing" is not a single relationship. The proposals on this page fall into two groups:
 
-- **Competing general-purpose proposals** (EIP-8175, EIP-8130, EIP-8202, Tempo-like): these overlap with EIP-8141's scope. Each is a different bet on how to deliver native account abstraction, trading along several axes: more generality vs. more constraint, EVM-in-validation vs. declared authenticators, recursive frames vs. flat capabilities. A chain adopts one of these, not several.
-- **Complementary proposals** (EIP-8223, EIP-8224, EIP-8215/HCA): these sit *off* the generality spectrum and compose with any of the above. EIP-8223 covers static gas sponsorship; EIP-8224 covers shielded gas funding; EIP-8215 covers PQ-safe address derivation for new accounts. They do not replace a general-purpose AA format. They plug specific gaps a general-purpose format leaves open.
+- **Competing general-purpose proposals** (EIP-8175, EIP-8130, EIP-8202, Tempo-like): these overlap with EIP-8141's scope and trade generality vs. constraint, EVM validation vs. declared authenticators, and recursive frames vs. flat capabilities. A chain adopts one of these, not several.
+- **Complementary proposals** (EIP-8223, EIP-8224, EIP-8215/HCA): these sit *off* the generality spectrum and compose with any general-purpose format. They cover static sponsorship, shielded gas funding, and PQ-safe address derivation.
 
 Read the tables below with this distinction in mind: the first half of the page compares EIP-8141 against its direct competitors; the sections on EIP-8223 and EIP-8224 describe how narrower primitives layer on top rather than replace.
 
@@ -71,7 +71,7 @@ EIP-8215/HCA is another related proposal outside the transaction-format spectrum
 | **EIP-8223** | secp256k1 sender only. Not a decoupling proposal. | No |
 | **EIP-8224** | fflonk ZK proof verification. Not a decoupling proposal. | No |
 
-Both EIP-8141 and EIP-8130 are fully PQ-ready, through different mechanisms. EIP-8141 achieves it via arbitrary account code in VERIFY frames plus `ARBITRARY` signature witnesses. EIP-8130 achieves it via authenticator contracts: deploy a contract implementing a PQ signature scheme, then add it to the canonical authenticator set. The tradeoff is expressiveness vs. operational predictability: EIP-8141's VERIFY frames can run any EVM logic, while EIP-8130's authenticators are constrained to the pure `authenticate(hash, data) -> actorId` interface, which gives nodes bounded, predictable validation cost.
+Both EIP-8141 and EIP-8130 are PQ-ready, through different mechanisms. EIP-8141 uses arbitrary account code plus `ARBITRARY` witnesses. EIP-8130 uses authenticator contracts added to a canonical set. The tradeoff is expressiveness vs. operational predictability: EIP-8141 can run any EVM logic, while EIP-8130 constrains validation to `authenticate(hash, data) -> actorId` for bounded cost.
 
 On key rotation: EIP-8130 has native onchain key rotation via `owner_config` changes, portable across chains. EIP-8141 delegates key management entirely to account code, with no protocol-level rotation mechanism. EIP-8223 offers key rotation for sponsored accounts via `authorize(newEOA)`.
 
@@ -79,7 +79,7 @@ On key rotation: EIP-8130 has native onchain key rotation via `owner_config` cha
 
 | Proposal | Sponsorship Model | Canonical Paymaster |
 |---|---|---|
-| **EIP-8141** | VERIFY frame authorizes payer. Canonical paymaster recognized by runtime code match. Non-canonical limited to 1 pending tx. Any EOA can sponsor via default code. | Yes: protocol-blessed, mempool-validated |
+| **EIP-8141** | VERIFY frame authorizes payer. Canonical paymaster recognized by runtime code match. Non-canonical limited to 1 pending tx. EOAs can sponsor via default code when the index-0 signature rule composes. | Yes: protocol-blessed, mempool-validated |
 | **EIP-8175** | Programmable `fee_auth` contract with `RETURNETH` escrow. Sponsor state persists even if main tx reverts. | No: fee_auth is per-sponsor |
 | **EIP-8130** | `payer` + `payer_auth` fields. Payer authenticated via same authenticator infrastructure as sender. | No: uses canonical authenticator set |
 | **EIP-8202** | `ROLE_PAYER` reserved but not yet defined. No sponsorship today. | No |
@@ -91,7 +91,7 @@ On key rotation: EIP-8130 has native onchain key rotation via `owner_config` cha
 
 | Proposal | Batching Model | Atomicity Control |
 |---|---|---|
-| **EIP-8141** | Multiple frames per tx. SENDER frames execute sequentially with per-frame gas. | Flags field bit 2 on consecutive SENDER frames: opt-in atomic batches |
+| **EIP-8141** | Multiple frames per tx. SENDER frames execute sequentially with per-frame gas. | Flags field bit 2 on consecutive frames of any mode; validation-prefix batches are excluded from the restrictive mempool |
 | **EIP-8175** | Typed capabilities list (CALL, CREATE). Sequential execution. | All-or-nothing: if any capability reverts, remaining are skipped |
 | **EIP-8130** | Call phases (array of arrays). Completed phases persist if later phases revert. | Per-phase atomicity: calls within a phase are atomic |
 | **EIP-8202** | Single execution payload. No native batching. | N/A: one call per tx (multicall wrappers needed) |
@@ -125,13 +125,13 @@ On EVM changes: EIP-8141 requires 6 new opcodes and a new frame execution model.
 | **EIP-8223** | ecrecover + 1 SLOAD at `0x13` + balance check | Minimal: static reads only, no EVM |
 | **EIP-8224** | fflonk proof verify (~176K gas) + EXTCODEHASH check + fixed storage reads | Minimal: bounded crypto + static reads, no EVM |
 
-On tracing requirements: EIP-8141 is the only proposal that requires full EVM tracing during validation (banned opcode enforcement, storage access tracking, validation-prefix pattern matching). EIP-8175 requires partial tracing for fee_auth simulation. EIP-8130 avoids tracing entirely for canonical authenticators: nodes can implement hot-path signature algorithms natively and skip EVM execution, resulting in lower validation gas and minimal validation state. Non-canonical authenticators remain usable inside ordinary execution, but are not accepted for direct 8130 transaction authentication under the spec.
+On tracing: EIP-8141 requires full EVM tracing during validation (banned opcodes, storage access, prefix matching). EIP-8175 requires partial tracing for fee_auth. EIP-8130 avoids tracing for canonical authenticators because nodes can implement hot-path signature algorithms natively. Non-canonical authenticators remain usable in ordinary execution, not direct 8130 authentication.
 
 ### Other Capabilities
 
 | Proposal | EOA Support | Account Creation | Async Execution | Cross-Chain |
 |---|---|---|---|---|
-| **EIP-8141** | Protocol-native default code (ECDSA secp256k1; P256 outer signatures require account code) | DEFAULT frame to deployer | Incompatible | Not addressed |
+| **EIP-8141** | Protocol-native default code (ECDSA secp256k1; P256 outer signatures require account code) | DEFAULT deploy frame through any trace-compatible factory | Incompatible | Not addressed |
 | **EIP-8175** | secp256k1 native; Ed25519 creates new addresses | Not addressed | Partially (fee_auth needs EVM) | Not addressed |
 | **EIP-8130** | Implicit EOA authorization, auto-delegation | CREATE2 via `account_changes` | Compatible | Yes: `chain_id = 0` replays |
 | **EIP-8202** | secp256k1 EOAs keep address; P256/Falcon create new | Not addressed | Compatible | Not addressed |

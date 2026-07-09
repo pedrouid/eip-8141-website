@@ -430,6 +430,8 @@ The day #11662 merged, forshtat asked for more detail on VERIFY-frame aggregatio
 
 ---
 
+<span id="phase-14-extended-feature-set-supersession-may-16-may-18"></span>
+
 ## Phase 14: Extended Feature Set Supersession (May 16 – May 18)
 
 *The resolution of the architectural question Phase 12 left dangling. PR #11662 (EXPIRY_VERIFIER, merged May 14) settled the envelope-expiry component of Pedro's bundle independently. On May 16 Pedro opened a successor, PR #11681, retaining guarantors, keyed nonces, and signer binding but dropping the now-redundant expiry field; on May 18 he closed #11643 in favor of it. The absorb-into-base position is unchanged.*
@@ -655,7 +657,7 @@ The signatures-list outer field (PR #11481, merged May 22) draws its first serio
 
 *nerolation — PR #11810; morph-dev — PR #11814, both Jun 17*
 
-matt's commitment lands as two PRs the same day. PR #11810 (nerolation) restores a Behavior section accidentally deleted in an earlier merge; it merged June 26 with no debate. PR #11814 (morph-dev, a new contributor) is a broader cleanup: raw `sig.signature` bytes are elided from every sig hash, `sig.signer` defaults to `tx.sender` when empty, and the rule that EXPIRY_VERIFIER must be the first frame is made explicit. Rebased June 30 with a few TODOs still open; still awaiting an Author review.
+matt's commitment lands as two PRs the same day. PR #11810 (nerolation) restores a Behavior section accidentally deleted in an earlier merge; it merged June 26 with no debate. PR #11814 (morph-dev, new contributor) cleans up: raw `sig.signature` bytes are elided from every sig hash, `sig.signer` defaults to `tx.sender` when empty, and the public-mempool rule that EXPIRY_VERIFIER must be the first frame is made explicit. Rebased June 30 with a few TODOs still open; still awaiting an Author review.
 
 ### Lightclient Re-Adds Arbitrary Signature Data (Spec)
 
@@ -691,7 +693,7 @@ PR #11837 lands the custom-verifier fix lightclient previewed in Phase 21. The s
 
 *lightclient, morph-dev - PR #11870 merged Jul 6; PR #11814 merged Jul 7*
 
-PR #11870 clarifies that `APPROVE` and frame/signature introspection exceptional-halt outside frame transactions, and updates intrinsic gas to charge actual frame/signature data plus signature-validation cost. PR #11814 folds the repair into the execution and mempool text: default code now requires a `SECP256K1` signature at `tx.signatures[0]`; empty signer metadata defaults to `tx.sender`; expiry verifier may only be first; validation-prefix flags must match `APPROVE` scope; intrinsic signature validation counts under `MAX_VERIFY_GAS`; no `VERIFY` frame may appear after the validation prefix. The ERC-20 sponsor example is also corrected: public sponsors check frame/signature metadata and accept sponsee frontrunning risk instead of checking token balance onchain.
+PR #11870 clarifies that `APPROVE` and frame/signature introspection exceptional-halt outside frame transactions, and updates intrinsic gas to charge actual frame/signature data plus signature-validation cost. PR #11814 folds the repair into the execution and mempool text: default code now requires a `SECP256K1` signature at `tx.signatures[0]`; empty signer metadata defaults to `tx.sender`; public-mempool expiry verifier may only be first; validation-prefix flags must match `APPROVE` scope; intrinsic signature validation counts under `MAX_VERIFY_GAS`; no `VERIFY` frame may appear after the validation prefix. The ERC-20 sponsor example is also corrected: public sponsors check frame/signature metadata and accept sponsee frontrunning risk instead of checking token balance onchain.
 
 ### EIP-8288 Review Becomes a Proof-Security Review (Sibling)
 

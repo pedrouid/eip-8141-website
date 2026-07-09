@@ -105,7 +105,7 @@ When `frame.target` has no code, the protocol applies built-in "default code" be
 4. Rely on the protocol-validated secp256k1 signature over `compute_sig_hash(tx)`.
 5. Call `APPROVE(allowed_scope)`.
 
-PR #11481 (merged May 22) moved per-tx signatures out of `frame.data` and into a dedicated outer `signatures` list. PR #11814 (merged Jul 7) tightened default code to use the secp256k1 signature at index `0` instead of scanning for a matching signer. PR #11621 (merged May 11) removed the P256 branch from the protocol-shipped default code. P256 remains a protocol-validated outer signature scheme, but codeless EOAs still get only secp256k1 default-code authentication; accounts that need passkeys or other schemes use deployed code plus `SIGPARAM`/custom verification.
+PR #11481 (merged May 22) moved per-tx signatures out of `frame.data` and into a dedicated outer `signatures` list. PR #11814 (merged Jul 7) tightened default code to use the secp256k1 signature at index `0` instead of scanning for a matching signer. That index-0 rule means two distinct codeless EOAs cannot both authenticate through default VERIFY in the same transaction; one side needs account code or a paymaster contract. PR #11621 (merged May 11) removed the P256 branch from the protocol-shipped default code. P256 remains a protocol-validated outer signature scheme, but codeless EOAs still get only secp256k1 default-code authentication; accounts that need passkeys or other schemes use deployed code plus `SIGPARAM`/custom verification.
 
 **SENDER and DEFAULT modes:** PR #11621 (merged May 11) changed default code so that `SENDER` and `DEFAULT` frames no longer revert. The previous behavior (revert unconditionally on both modes, plus an RLP-call-batch decoder removed by PR #11577 on Apr 29) blocked simple native ETH transfers to a fresh EOA via a frame transaction. After the merge, a `SENDER` or `DEFAULT` frame whose `resolved_target` has no code completes the value transfer and returns with empty data.
 
@@ -173,10 +173,9 @@ Constraints:
 - `frame.value == 0`
 - `len(frame.data) == EXPIRY_DATA_LENGTH` (`8`)
 - At most one expiry-verifier frame per transaction
-- If present, it may only be the first frame in the frame list
-- The frame succeeds without calling `APPROVE`; only `self_verify`, `only_verify`, and `pay` frames are required to call `APPROVE` for transaction validity. PR #11662 relaxed the previously-uniform "every VERIFY frame must call APPROVE" rule to "if the frame reverts, the transaction is invalid".
+- The frame succeeds without calling `APPROVE`; public-mempool validation shapes (`self_verify`, `only_verify`, and `pay`) are the approval-bearing frames. PR #11662 relaxed the previously-uniform "every VERIFY frame must call APPROVE" rule to "if the frame reverts, the transaction is invalid".
 
-Mempool admission: nodes MUST drop a transaction from the public mempool whose expiry is less than the node's current view of `block.timestamp` at any point. Expiry-verifier frames are exempt from validation trace rules, storage-dependency tracking, and `MAX_VERIFY_GAS`. The `TIMESTAMP` opcode is permitted only in an expiry-verifier frame executing the canonical runtime code. Clients may omit explicit EVM execution and perform the deadline check natively when the externally observable result is identical.
+Mempool admission: if present, an expiry-verifier frame may only be the first frame in the frame list for public propagation. Nodes MUST drop a transaction from the public mempool whose expiry is less than the node's current view of `block.timestamp` at any point. Expiry-verifier frames are exempt from validation trace rules, storage-dependency tracking, and `MAX_VERIFY_GAS`. The `TIMESTAMP` opcode is permitted only in an expiry-verifier frame executing the canonical runtime code. Clients may omit explicit EVM execution and perform the deadline check natively when the externally observable result is identical.
 
 Validation-prefix shape matching treats expiry-verifier frames as transparent: `[expiry_verify, self_verify]` is recognized as `[self_verify]` for admission-rule purposes.
 
@@ -259,6 +258,8 @@ If the swap reverts, the ERC-20 approval is also reverted.
 | 2 | SENDER | target | User's call |
 
 Frame 0 deploys the account; frames 1-2 validate and execute.
+
+<span id="5-eoa-paying-gas-in-erc-20s"></span>
 
 ### 5. EOA Paying Gas in ERC-20s
 

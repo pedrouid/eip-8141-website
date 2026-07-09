@@ -82,21 +82,21 @@ The bounded signature sizes (`MAX_WEBAUTHN_SIG_SIZE = 2,049 bytes`) and determin
 | **New opcodes** | None | 6 (`APPROVE`, `TXPARAM`, `FRAMEDATALOAD`, `FRAMEDATACOPY`, `FRAMEPARAM`, `SIGPARAM`) |
 | **Tx type** | `0x76` | `0x06` |
 | **Composition model** | Flat call list, all-or-nothing | Recursive frames with modes and per-frame gas |
-| **Signature schemes** | Fixed set: secp256k1, P-256, WebAuthn | Arbitrary via account code + `APPROVE` |
+| **Signature schemes** | Fixed set: secp256k1, P-256, WebAuthn | Account code plus protocol signatures or `ARBITRARY` witnesses |
 | **Validation model** | Cryptographic only — fixed scheme detection | Programmable EVM in VERIFY frames |
-| **Atomic batching** | Native: `calls` list, entire tx reverts on failure | Flags field bit 2 on consecutive SENDER frames |
+| **Atomic batching** | Native: `calls` list, entire tx reverts on failure | Flags field bit 2 on consecutive frames of any mode; validation-prefix batches are excluded from the restrictive mempool |
 | **Gas sponsorship** | `fee_payer_signature` field (secp256k1 only) | VERIFY frame for sponsor, canonical paymaster |
-| **Validity windows** | Native: `valid_after` / `valid_before` | Not addressed |
-| **2D nonces** | Native: `nonce_key` + `nonce` | Not addressed (single nonce) |
-| **Passkeys/WebAuthn** | Native at transaction layer | Account code must implement |
+| **Validity windows** | Native: `valid_after` / `valid_before` | Expiry verifier plus EIP-8266 expiring nonce sibling; no `valid_after` scheduling |
+| **2D nonces** | Native: `nonce_key` + `nonce` | EIP-8250 keyed-nonce sibling |
+| **Passkeys/WebAuthn** | Native at transaction layer | P256 can be protocol-validated; account code must authorize it |
 | **Access keys** | Keychain wrapper + companion EIP | Not addressed |
 | **EIP-7702 interop** | `authorization_list` field | No authorization list (PQ incompatible) |
-| **Per-call receipts** | Native: each call gets `success`, `gas_used`, `logs` | Single receipt for entire tx |
+| **Per-call receipts** | Native: each call gets `success`, `gas_used`, `logs` | Per-frame receipt sub-entries |
 | **Mempool complexity** | Low: deterministic crypto verification, bounded sizes | High: validation prefix, banned opcodes, gas caps |
-| **PQ readiness** | Not addressed; P-256/WebAuthn are not PQ-safe | Native: arbitrary sig schemes in VERIFY frames |
+| **PQ readiness** | Not addressed; P-256/WebAuthn are not PQ-safe | Any scheme via account code plus `ARBITRARY` signature witnesses |
 | **Programmable validation** | No — fixed scheme set | Yes — arbitrary EVM logic |
 | **Async execution** | Compatible (no EVM in validation) | Incompatible with async models |
-| **Account creation** | Not addressed | DEFAULT frame to deployer contract |
+| **Account creation** | Not addressed | DEFAULT deploy frame through any trace-compatible factory |
 | **EOA default behavior** | Requires 7702 for non-secp256k1 EOAs | Protocol-native default code for codeless accounts |
 
 ## Activity

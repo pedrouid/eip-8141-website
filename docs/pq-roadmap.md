@@ -63,6 +63,8 @@ Under EIP-8141, this is expressible natively: VERIFY frames check the current si
 
 ---
 
+<span id="4-encrypted-mempools"></span>
+
 ## 4. Encrypted Mempools
 
 **Status**: EIP-8184 (Draft, March 2026)

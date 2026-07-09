@@ -4,16 +4,16 @@
 
 ## TL;DR
 
-EIP-8141 separates **what is consensus-valid** (programmable, broad) from **what the public mempool propagates** (constrained, opinionated). The proposed strategy uses two tiers in parallel:
+EIP-8141 separates **consensus validity** (programmable, broad) from **public propagation** (constrained, opinionated). The proposed strategy uses two tiers:
 
-- **Restrictive mempool** ships in clients first. Covers status-quo accounts, bounded custom validation, protocol-validated outer signatures, and gas sponsorship via canonical or low-volume non-canonical paymasters. This is the [public mempool policy already specified](/current-spec#mempool-policy) in the current spec.
-- **Expansive mempool** develops in parallel, opt-in per node. Built on the [ERC-7562](https://eips.ethereum.org/EIPS/eip-7562) lineage. Handles privacy protocols and complex validation. FOCIL nodes default to the restrictive set and may add expansive channels at their discretion.
+- **Restrictive mempool** ships first. Covers status-quo accounts, bounded custom validation, protocol-validated outer signatures, and gas sponsorship via canonical or low-volume non-canonical paymasters. This is the [specified public mempool policy](/current-spec#mempool-policy).
+- **Expansive mempool** develops in parallel, opt-in per node. Built on the [ERC-7562](https://eips.ethereum.org/EIPS/eip-7562) lineage. Handles privacy protocols and complex validation. FOCIL nodes default to the restrictive set.
 
-For state, the proposal extends the [VOPS](/vops-compatibility#state-growth-at-scale) baseline to include **nonce, balance, code, and the first 4 storage slots per account**. Use cases outside this extension pay an explicit cost: a **merkle branch** (4-8 kB today, 1-2 kB after binary tree migration) per extra-VOPS state item. See the [AA-VOPS thread](https://ethresear.ch/t/a-pragmatic-path-towards-validity-only-partial-statelessness-vops/22236) for origin.
+For state, the proposal extends the [VOPS](/vops-compatibility#state-growth-at-scale) baseline to **nonce, balance, code, and the first 4 storage slots per account**. Extra reads pay for a **merkle branch** (4-8 kB today, 1-2 kB after binary tree migration) per item. See the [AA-VOPS thread](https://ethresear.ch/t/a-pragmatic-path-towards-validity-only-partial-statelessness-vops/22236).
 
-The framing is borrowed from Bitcoin: **let consensus rules do a lot, but restrict at the mempool layer**. Bitcoin Core's policy rules are upgradable without hardforks, which is why Bitcoin has evolved for 15+ years while keeping the consensus footprint narrow. EIP-8141 applies the same pattern.
+The framing is borrowed from Bitcoin: **let consensus rules do a lot, but restrict at the mempool layer**. Policy can evolve without hardforks while consensus stays narrow.
 
-A consequence: **the proposal claims frame transactions reduce the structural need for off-chain relayers**. Public ERC-20 sponsorship can be expressed as a non-canonical paymaster that checks frame shape and accepts frontrunning risk, while fully trustless balance-checking variants route through the expansive tier or private submission because they read external token storage. See [ERC-20 gas repayment](#erc20-paymaster-patterns).
+A consequence: **the proposal claims frame transactions reduce the structural need for off-chain relayers**. Public ERC-20 sponsors check frame shape and accept frontrunning risk; trustless balance-checking variants route through the expansive tier or private submission because they read external token storage. See [ERC-20 gas repayment](#erc20-paymaster-patterns).
 
 ---
 
@@ -21,7 +21,7 @@ A consequence: **the proposal claims frame transactions reduce the structural ne
 
 > **Note**: The restrictive tier is in the current EIP-8141 spec. The expansive tier is a proposed framework, not a shipped feature.
 
-A frame transaction that does not match the mempool rules is still **consensus-valid on-chain**. It just cannot be gossiped through the public p2p network. This separation makes the two-tier strategy possible.
+A frame transaction that misses the mempool rules is still **consensus-valid on-chain**. It just cannot be gossiped through the public p2p network.
 
 | Tier | What it carries | Validation cost | Status |
 |---|---|---|---|
@@ -41,7 +41,7 @@ The restrictive tier covers a small surface:
 
 Validation constraints: one of four prefix shapes, validation-prefix gas plus intrinsic signature-validation cost no more than 100k, banned opcodes (ORIGIN, TIMESTAMP, BLOCKHASH, BALANCE, SSTORE, etc.), storage reads only on `tx.sender`, no calls to non-existent contracts, matching approval-scope flags, no atomic-batch flag inside the validation prefix, and no VERIFY frame after the validation prefix. `CREATE`, `CREATE2`, and `SETDELEGATE` (EIP-7819) are banned outside the first deploy frame and allowed inside it for installing code at `tx.sender` (PR #11567); `SSTORE`s on `tx.sender`'s storage are also allowed inside the deploy frame.
 
-**Expiry-verifier frames** (PR #11662, merged May 14; tightened by #11814 on Jul 7) are admitted as a special case: a `VERIFY` frame targeting `EXPIRY_VERIFIER = address(0x8141)` carries an 8-byte unix-seconds deadline as `frame.data`, may appear only as the first frame, and is exempt from validation trace rules, storage-dependency tracking, and `MAX_VERIFY_GAS`. The `TIMESTAMP` opcode is permitted only for the canonical runtime code at this address. Public-mempool nodes MUST drop transactions whose expiry is in the past relative to their current view of `block.timestamp`. Validation-prefix shape matching treats expiry-verifier frames as transparent (`[expiry_verify, self_verify]` matches `[self_verify]`).
+**Expiry-verifier frames** (PR #11662, merged May 14; tightened by #11814 on Jul 7) are admitted as a special case: a `VERIFY` frame targeting `EXPIRY_VERIFIER = address(0x8141)` carries an 8-byte unix-seconds deadline as `frame.data`, may appear only as the first frame for public propagation, and is exempt from validation trace rules, storage-dependency tracking, and `MAX_VERIFY_GAS`. The `TIMESTAMP` opcode is permitted only for the canonical runtime code at this address. Public-mempool nodes MUST drop transactions whose expiry is in the past relative to their current view of `block.timestamp`. Validation-prefix shape matching treats expiry-verifier frames as transparent (`[expiry_verify, self_verify]` matches `[self_verify]`).
 
 What this enables: default-code secp256k1 EOAs, smart accounts with bounded validation, protocol-validated outer signatures (`SECP256K1` and `P256`), `ARBITRARY` witness bytes for custom schemes, ETH-funded gas sponsorship via the canonical paymaster, and non-canonical sponsors that fit the one-pending-tx cap.
 
@@ -64,7 +64,7 @@ What this enables: default-code secp256k1 EOAs, smart accounts with bounded vali
 
 Example 5 in the spec ([EOA Paying Gas in ERC-20s](/current-spec#5-eoa-paying-gas-in-erc-20s)) is now the public sponsor shape: it checks signature metadata and the next ERC-20 transfer frame, not the user's token balance.
 
-The restriction on the trustless balance-checking pattern is deliberate. The restrictive tier forbids arbitrary external storage reads during validation in order to preserve VOPS compatibility (see [VOPS Compatibility](/vops-compatibility)): a node running with a partial-statelessness slice cannot safely validate a transaction whose inclusion depends on state outside its slice. The current public workaround is economic, not cryptographic: the sponsor prices or limits the risk that the user can drain the token balance before inclusion. Active design directions for bringing stricter variants onto the public mempool in a future revision include **AMM paymaster contracts** (liquidity providers absorb the frontrunning risk in exchange for a fee), **ERC-7562-style validation rules** allowing narrowly-scoped shared-state reads under staking or reputation constraints, and **guarantor payers** (open in [PR #11555](https://github.com/ethereum/EIPs/pull/11555), Apr 22) where a guarantor commits to paying gas even if sender validation fails, letting mempool nodes skip sender simulation entirely and admit VERIFY frames that read shared state. These are open, not specified.
+The trustless balance-checking restriction is deliberate. The restrictive tier forbids external storage reads during validation to preserve VOPS compatibility: a partial-stateless node cannot validate inclusion that depends on state outside its slice. The public workaround is economic: the sponsor prices balance-drain risk. Future public paths could use **AMM paymaster contracts**, **ERC-7562-style validation rules** for narrow shared-state reads, or **guarantor payers** ([PR #11555](https://github.com/ethereum/EIPs/pull/11555)) that let nodes skip sender simulation. These are open, not specified.
 
 ---
 
@@ -72,7 +72,7 @@ The restriction on the trustless balance-checking pattern is deliberate. The res
 
 For use cases exceeding restrictive policy. Principal examples: **privacy protocols** that must read state outside `tx.sender` to verify nullifiers, and **trustless ERC-20 balance-checking paymasters** whose VERIFY frames read ERC-20 contract storage to authorize payment (see [ERC-20 gas repayment](#erc20-paymaster-patterns)).
 
-The expansive tier accepts ERC-7562-style validation with staking/reputation, paymaster-extended policies, and arbitrary VERIFY logic subject to the node's resource budget. It is not a precondition for shipping EIP-8141. Clients ship restrictive first; the privacy/complex-validation community develops expansive independently. No hardfork dependency between the two.
+The expansive tier accepts ERC-7562-style validation with staking/reputation, paymaster-extended policies, and arbitrary VERIFY logic subject to the node's resource budget. It is not a precondition for shipping EIP-8141; clients ship restrictive first.
 
 Transactions that do not fit the restrictive tier are still consensus-valid on-chain. They just do not propagate through the public p2p network and must reach a block builder through private channels (direct submission, bundled relays, opt-in expansive-tier peers).
 
@@ -89,7 +89,7 @@ The proposed extension for frame transactions:
 | Code | Already in VOPS | Needed to detect smart accounts |
 | **First 4 storage slots** | New | Covers most common AA validation reads |
 
-A small constant-factor increase over the VOPS baseline, covering the validation reads of well-designed AA wallets (signer set, sequencer key, replay-protection counter).
+A small constant-factor increase over VOPS, covering common AA validation reads such as signer sets and replay counters.
 
 ---
 
@@ -102,7 +102,7 @@ For use cases reading state outside VOPS+4, the transaction includes a merkle br
 | Branch size per item | 4-8 kB | 1-2 kB |
 | Items typically proved | 1-2 | 1-2 |
 
-Status-quo and AA-VOPS-friendly transactions pay zero extra. Privacy protocol transactions pay one or two branches. The infrastructure already exists in clients (witness machinery for sync, standardized RPC methods for users to obtain witnesses).
+Status-quo and AA-VOPS-friendly transactions pay zero extra. Privacy transactions pay one or two branches. The witness infrastructure already exists in clients.
 
 ---
 
@@ -126,11 +126,11 @@ Frames + FOCIL + VOPS coexist for the majority of traffic. Edge cases pay per-tx
 
 ---
 
+<span id="why-frame-transactions-dont-need-relayers"></span>
+
 ## Why Frame Transactions Don't Need Relayers
 
-Anything a relayer does for EIP-4337 can be expressed as a pure onchain smart contract under EIP-8141.
-
-**Privacy rebroadcasters** become onchain contracts observing the canonical mempool and repackaging transactions with witness branches. **ERC-20 gas fronting** takes two shapes under EIP-8141: a public non-canonical sponsor that checks frame shape and accepts balance-drain risk, and a trustless balance-checking sponsor that routes through the expansive tier or private submission. See [ERC-20 gas repayment](#erc20-paymaster-patterns).
+Anything a relayer does for EIP-4337 can be expressed as an onchain contract under EIP-8141. **Privacy rebroadcasters** observe the canonical mempool and repackage transactions with witness branches. **ERC-20 gas fronting** uses either a public non-canonical sponsor that accepts balance-drain risk or a trustless balance-checking sponsor that routes through the expansive tier or private submission. See [ERC-20 gas repayment](#erc20-paymaster-patterns).
 
 This is the structural argument against EIP-4337 + EIP-7702: in those designs, the relayer is required because validation does not run in-protocol. EIP-8141 brings validation in-protocol, which the proposal claims removes the structural need for out-of-protocol actors. Whether on-chain substitutes match bundlers' operational properties in practice is an open question.
 
@@ -148,7 +148,7 @@ Nodes that cannot validate frame transactions cannot maintain healthy mempools, 
 
 ### Canonical Paymaster Adoption
 
-The restrictive tier relies on a canonical paymaster recognized by runtime code match. If wallets prefer non-canonical paymasters (richer features, multi-token payment), those transactions are limited to 1 pending tx each and cannot be enforced by FOCIL. Historical precedent: ERC-4337 paymaster diversity is high, with no dominant canonical variant. The expansive tier is the proposed long-term answer, but it is opt-in. This remains market-driven, not protocol-enforceable.
+The restrictive tier relies on a canonical paymaster recognized by runtime code match. Non-canonical paymasters are limited to 1 pending tx each and lose FOCIL enforcement. ERC-4337 paymaster diversity suggests adoption is market-driven; the expansive tier is the opt-in long-term answer.
 
 ### Encrypted Mempool Compatibility
 
@@ -168,7 +168,7 @@ Nero_eth's [Three Gates to Privacy](https://ethresear.ch/t/frame-transactions-an
 | **FOCIL enforcement** | Per-tx 100k cap and per-IL 250k budget | Cumulative budget fits ~2 frame transactions; append-loop builder compliance imposes quadratic overhead |
 | **VOPS / AA-VOPS node validation** | Nodes carry only balance/nonce (VOPS) or a few slots per account (AA-VOPS) | Nullifier lookups are hash-keyed slots in an external contract; no fixed N suffices, AA-VOPS cannot help |
 
-What frame transactions already give privacy flows: invalid-proof and replayed-proof cases both cause `VERIFY` to revert before gas is charged, so a sponsor can be paid from the withdrawn amount itself with zero trust assumption and no out-of-protocol relayer. The gates, not the flow itself, are what block inclusion today.
+Frame transactions already remove relayer trust from the flow: invalid or replayed proofs revert in `VERIFY` before gas is charged, so the sponsor can be paid from the withdrawal itself. The gates block inclusion, not the payment flow.
 
 The post proposes five protocol changes to create a viable inclusion path:
 
@@ -178,7 +178,7 @@ The post proposes five protocol changes to create a viable inclusion path:
 4. Raise `MAX_VERIFY_GAS_PER_INCLUSION_LIST` to 2^20 (1M gas).
 5. Relax the bounded state-access rule for canonical privacy pools so nullifier reads are propagatable.
 
-Tradeoff acknowledged in the post: under the validation-index model, attesters absorb up to ~28% of block gas in the worst case within the 4-second attestation deadline. Whether that remains feasible under stressed network conditions is open. The proposal also assumes PS (partially stateful) nodes voluntarily track privacy pools, an infrastructure coordination problem that protocol changes alone do not solve.
+Tradeoff acknowledged in the post: validation-index attesters absorb up to ~28% of block gas in the worst case within the 4-second deadline. Feasibility under stress and voluntary PS-node tracking of privacy pools remain open.
 
 See [VOPS Compatibility → Status](/vops-compatibility#status) for the state-side row on privacy-pool reads.
 

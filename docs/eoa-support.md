@@ -9,7 +9,7 @@ EIP-8141 makes existing EOAs first-class AA users with no migration, no smart-ac
 - **Replaces EIP-7702 delegation for common cases**. No `set_code` tx, no persistent delegate, no extra signing ceremony.
 - **Per-transaction, not persistent**. Default code is protocol logic, not state on the account. Nothing is recorded on-chain.
 - **Composable per-transaction**. The wallet picks the frame composition for each transaction.
-- **EOA can act as a paymaster**. Any EOA can sign as a sponsor without deploying a paymaster contract.
+- **EOA can act as a paymaster**. An ETH-funded EOA can sponsor via default code, with the index-0 signature caveat below.
 - **Custom account code remains available**. Accounts that need richer logic can still deploy code, which overrides default code.
 - **DEFAULT frames serve positional roles**. First frame for account deployment, last frame for paymaster post-op refunds.
 
@@ -23,7 +23,7 @@ Every EOA gets the following behavior without opt-in, deployment, or signed auth
 
 ### VERIFY mode
 
-1. Require `frame.target == tx.sender` unless the approval scope is payer-only (`0x1`). Any EOA can serve as a paymaster.
+1. Require `frame.target == tx.sender` unless the approval scope is payer-only (`0x1`). Payment-only approval can target a different EOA paymaster.
 2. Read approval scope from the flags field: `scope = frame.flags & 3`. If `scope == 0`, revert.
 3. Require `tx.signatures[0]` to be a `SECP256K1` entry with empty `msg` whose resolved signer equals the resolved frame target. Empty signer metadata resolves to `tx.sender`.
    - `0x1` (`SECP256K1`): parse the signature, enforce low-`s`, reject failed `ecrecover`, require `resolved_target == ecrecover(sig_hash, sig)`.
@@ -31,6 +31,8 @@ Every EOA gets the following behavior without opt-in, deployment, or signed auth
 4. Call `APPROVE(scope)`.
 
 PR #11481 (merged May 22) moved per-tx signatures out of `frame.data` and into a dedicated outer `signatures` list. PR #11814 (merged Jul 7) then replaced the linear scan with the simpler index-0 default-code rule. The outer list now has three schemes: `ARBITRARY (0x0)`, `SECP256K1 (0x1)`, and `P256 (0x2)`. P256 is protocol-validated in the list, but PR #11621 (merged May 11) removed the P256 branch from default code. Hardware wallets and passkey-based accounts that need P256 must still ship that logic themselves (via deployed code, `SIGPARAM`, and custom verification, or via a future extension EIP). secp256k1 ECDSA is the only signature scheme that ships in the protocol-level default code.
+
+The index-0 rule has a composability caveat: a distinct codeless EOA sender and a distinct codeless EOA sponsor cannot both authenticate through default VERIFY in one transaction, because both would need `tx.signatures[0]` to resolve to different accounts. In that case the sender needs account code, the sponsor needs paymaster code, or the transaction should use the canonical paymaster path.
 
 ### SENDER mode
 
@@ -66,7 +68,7 @@ Default code returns with empty data without performing any other action. PR #11
 | Delegate deployment | Required (deploy + audit) | None (protocol logic) |
 | Per-tx flexibility | Limited to delegate's features | Wallet composes per transaction |
 | Signature schemes | Whatever delegate implements | secp256k1 baked in for codeless EOAs; P256 is an outer signature scheme but not accepted by default code |
-| Gas sponsorship | Delegate must implement | Any EOA via default VERIFY |
+| Gas sponsorship | Delegate must implement | Canonical paymaster, or EOA default VERIFY with index-0 caveat |
 | Reversal cost | Another `set_code` authorization | Nothing to reverse |
 
 The cost of EIP-7702 in production: (1) wallet must develop and audit a smart account, (2) wallet must run relayer infrastructure on every chain, (3) user must sign a delegation, (4) delegation is persistent so revocation requires another authorization. Default code eliminates all four for the common case. See [Developer Tooling → Bull Case](/developer-tooling#bull-case-native-aa-with-powerful-defaults).
@@ -83,7 +85,7 @@ Each composition is a distinct frame transaction. Nothing on the account changes
 
 ## EOA as Paymaster
 
-Any EOA can act as an ETH-funded paymaster. The default VERIFY logic supports `APPROVE(scope)` for payment scope (`0x1`) and combined scope (`0x3`). A sponsor signs a VERIFY frame with payment scope; default code verifies the signature and approves payment. The sponsor's ETH balance covers the user's gas. No paymaster contract needed.
+An EOA can act as an ETH-funded paymaster. The default VERIFY logic supports `APPROVE(scope)` for payment scope (`0x1`) and combined scope (`0x3`). A sponsor signs a VERIFY frame with payment scope; default code verifies the signature and approves payment. The sponsor's ETH balance covers the user's gas. No paymaster contract is needed when the other account's validation does not also require default-code signature index `0`.
 
 This composes with the [restrictive mempool tier](/mempool-strategy#restrictive-mempool-what-ships-first) under the `MAX_PENDING_TXS_USING_NON_CANONICAL_PAYMASTER = 1` rule per sponsor. The canonical paymaster contract exists for high-throughput ETH-funded sponsorship.
 

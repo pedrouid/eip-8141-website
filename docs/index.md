@@ -13,7 +13,7 @@ hero:
       link: https://demo.eip-8141.ethrex.xyz/
 features:
   - title: Programmable Validation
-    details: Accounts define their own validation with frame code, protocol-validated signatures, and ARBITRARY witness bytes
+    details: Accounts define validation with frame code, protocol signatures, and ARBITRARY witness bytes
   - title: Gas Sponsorship
     details: Third parties pay gas through sponsor VERIFY frames. No bundlers or relayers needed.
   - title: Atomic Batching

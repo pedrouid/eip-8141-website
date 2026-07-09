@@ -66,6 +66,8 @@ EIP-7702 relies on ECDSA for its authorization list, making it incompatible with
 
 ---
 
+<span id="4-users"></span>
+
 ## 4. Users
 
 **4.1. What does EIP-8141 mean for regular users?**
@@ -154,7 +156,7 @@ EIP-8141 offers the most flexible PQ path (arbitrary account code plus `ARBITRAR
 
 **7.1. How do nodes validate frame transactions?**
 
-Nodes execute the VERIFY frames and check that `APPROVE` is called. The [mempool policy](/current-spec#mempool-policy) restricts validation to recognized prefixes with bounded gas and banned opcodes.
+Nodes simulate the validation prefix. Approval-bearing validation frames must call `APPROVE`; expiry-verifier frames are the special no-approval case. The [mempool policy](/current-spec#mempool-policy) restricts public propagation to recognized prefixes with bounded gas and banned opcodes.
 
 **7.2. What is the canonical paymaster?**
 
@@ -162,7 +164,7 @@ A standardized paymaster contract recognized by mempool policy. Nodes verify it 
 
 **7.3. What if wallets don't adopt the canonical paymaster?**
 
-Transactions using non-canonical paymasters cannot propagate through the public mempool or be enforced by FOCIL inclusion lists - degrading censorship resistance for those users. [See open question →](/mempool-strategy#canonical-paymaster-adoption)
+They can propagate only under the one-pending-transaction cap per non-canonical paymaster. Higher-volume or richer paymasters route through the expansive tier or private submission and lose the canonical paymaster's FOCIL-friendly path. [See open question →](/mempool-strategy#canonical-paymaster-adoption)
 
 **7.4. Does this affect censorship resistance?**
 
@@ -170,7 +172,7 @@ Potentially. Mempool health is censorship resistance - if minimal nodes can't va
 
 **7.5. Can a frame transaction expire?**
 
-Yes. PR #11662 (merged May 14) added an expiry-verifier frame: a `VERIFY` frame targeting `address(0x8141)` whose `frame.data` is an 8-byte unix-seconds deadline. The canonical runtime reverts if the deadline has passed, and the public mempool drops the transaction as soon as the deadline is in the past. At most one such frame is allowed, and if present it must be first. [Spec details →](/current-spec#expiry-verifier-frame)
+Yes. PR #11662 (merged May 14) added an expiry-verifier frame: a `VERIFY` frame targeting `address(0x8141)` whose `frame.data` is an 8-byte unix-seconds deadline. The canonical runtime reverts if the deadline has passed, and the public mempool drops the transaction as soon as the deadline is in the past. At most one such frame is valid; public propagation requires it to be first. [Spec details →](/current-spec#expiry-verifier-frame)
 
 **7.6. What's the difference between EXPIRY_VERIFIER and EIP-8266 expiring nonces?**
 
