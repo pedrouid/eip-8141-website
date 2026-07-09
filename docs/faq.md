@@ -70,7 +70,7 @@ EIP-7702 relies on ECDSA for its authorization list, making it incompatible with
 
 **4.1. What does EIP-8141 mean for regular users?**
 
-Users get gas sponsorship, atomic batching, and passkey/biometric signing without needing to deploy smart contracts, migrate to new addresses, or rely on third-party relayers.
+Users get gas sponsorship, atomic batching, and secp256k1 default-code signing without needing to deploy smart contracts, migrate to new addresses, or rely on third-party relayers. Passkeys/P256 are supported as protocol-validated outer signatures, but codeless EOA default code does not accept them directly.
 
 **4.2. Can I keep my existing EOA address?**
 
@@ -78,7 +78,7 @@ Yes. EOAs work natively with frame transactions - no code deployment, no delegat
 
 **4.3. Can I pay gas in ERC-20 tokens?**
 
-Yes, via one of two independent EIP-8141 paymaster patterns. A **live ERC-20 paymaster (offchain)** runs a signing service that pre-validates your transaction and returns a signature; the VERIFY frame just checks the signature, so the transaction propagates through the public mempool as a non-canonical paymaster (one pending tx per paymaster). A **permissionless ERC-20 paymaster (onchain)** is a self-contained contract that introspects the next SENDER frame to confirm the ERC-20 transfer without any offchain service; that introspection reads external contract state, so it is consensus-valid but does not propagate through the public mempool today and routes through the expansive tier, a private mempool, or direct-to-builder submission. Neither pattern relies on ERC-4337 infrastructure. [See Mempool Strategy → ERC-20 gas repayment: two paymaster patterns →](/mempool-strategy#erc20-paymaster-patterns)
+Yes, through non-canonical paymasters. The public-mempool shape lets a sponsor inspect sponsor data and the next ERC-20 transfer frame, then accept the risk that the user drains the token balance before inclusion. A trustless onchain balance-checking paymaster can read token storage, but that exceeds the restrictive tier and routes through the expansive tier, a private mempool, or direct-to-builder submission. Neither pattern relies on ERC-4337 infrastructure. [See Mempool Strategy → ERC-20 gas repayment →](/mempool-strategy#erc20-paymaster-patterns)
 
 **4.4. Can I batch multiple actions in one transaction?**
 
@@ -90,7 +90,7 @@ No. The protocol has built-in default behavior for codeless accounts: secp256k1 
 
 **4.6. Is this compatible with passkeys / biometrics?**
 
-Not natively, after PR #11621 (merged May 11) removed the P256 branch from default code. Passkey and WebAuthn support now requires deployed account code or a future extension EIP; the previous tradeoff (P256 accounts don't support key rotation, flagged by frangio and shemnon) is part of why the protocol-shipped default code narrowed to secp256k1 only.
+Partly. The outer signatures list now includes `P256 (0x2)` as a protocol-validated scheme, but PR #11621 removed P256 from codeless EOA default code. Passkey and WebAuthn authorization therefore requires deployed account code that uses the validated signature metadata, or a future extension EIP; secp256k1 remains the only default-code authentication path.
 
 **4.7. How do I send ETH to someone with a frame transaction?**
 
@@ -114,7 +114,7 @@ Yes. Today, wallets depend on bundler providers (Pimlico, Alchemy, etc.) for AA 
 
 **5.4. What about gas sponsorship infrastructure?**
 
-For ETH-funded sponsorship (the sponsor pays the user's gas from its own ETH balance), wallets interact with the canonical paymaster directly at the protocol level. No paymaster service API, no vendor SDK, no third-party uptime dependency. For ERC-20 gas repayment the wallet picks a pattern: a live (offchain) paymaster service keeps a vendor dependency but propagates through the public mempool as a non-canonical paymaster; a permissionless (onchain) paymaster removes the service but routes through the expansive tier, a private mempool, or direct-to-builder submission. [See 4.3 →](#4-users)
+For ETH-funded sponsorship (the sponsor pays the user's gas from its own ETH balance), wallets interact with the canonical paymaster directly at the protocol level. No paymaster service API, no vendor SDK, no third-party uptime dependency. For ERC-20 gas repayment, the public shape is a non-canonical sponsor that accepts frontrunning risk; a trustless balance-checking paymaster removes that risk but routes through the expansive tier, a private mempool, or direct-to-builder submission. [See 4.3 →](#4-users)
 
 **5.5. Can wallets still build custom validation logic?**
 
@@ -126,9 +126,13 @@ Move validation logic from `validateUserOp` into VERIFY frame code that calls `A
 
 **5.7. Can I give an AI agent or session a scoped key that expires?**
 
-Yes, via account code. Default code covers only secp256k1 on the primary key (P256 was removed from default code by PR #11621, May 11); richer policies (expiry, per-call caps, allowlists) live in the account's own VERIFY logic and remain valid on-chain. Whether such a transaction propagates publicly depends on the [mempool tier](/mempool-strategy#two-tiers-in-one-mempool) it fits.
+Yes, via account code. Default code covers only secp256k1 at signature index 0 on the primary key; richer policies (expiry, per-call caps, allowlists) live in the account's own VERIFY logic and remain valid on-chain. Whether such a transaction propagates publicly depends on the [mempool tier](/mempool-strategy#two-tiers-in-one-mempool) it fits.
 
-**5.8. Is there a standard for existing modular smart accounts to use frame transactions?**
+**5.8. How do custom verifiers get signature bytes without circular hashes?**
+
+They put witness bytes in an `ARBITRARY` signature entry, not in frame data. `ARBITRARY` entries are structurally checked by the protocol, raw bytes are available through `SIGPARAM`, and signatures with empty `msg` have raw signature bytes elided from `compute_sig_hash(tx)`. That lets account code validate custom schemes over the canonical transaction hash without the signature committing to itself.
+
+**5.9. Is there a standard for existing modular smart accounts to use frame transactions?**
 
 Yes. ERC-8286 (draft, `requires: 7579, 8141`) standardizes how ERC-7579 modular accounts implement the frame validation flow: a validator module returns an approval mode the account applies via `APPROVE` in a VERIFY frame. See [Developer Tooling](/developer-tooling#where-fragmentation-risk-still-lives).
 
@@ -138,11 +142,11 @@ Yes. ERC-8286 (draft, `requires: 7579, 8141`) standardizes how ERC-7579 modular 
 
 **6.1. Is EIP-8141 post-quantum safe?**
 
-The transaction format itself has no ECDSA dependency. Accounts choose their own signature scheme in VERIFY frames - any PQ algorithm can be used without protocol changes.
+The transaction format itself has no ECDSA dependency. Accounts choose their own signature scheme in VERIFY frames, and custom witness bytes can live in `ARBITRARY` signature entries exposed by `SIGPARAM`. Any PQ algorithm can be used by account code without changing the frame transaction envelope.
 
 **6.2. How does this compare to other proposals?**
 
-EIP-8141 offers the most flexible PQ path (arbitrary schemes). EIP-8202 now includes native Falcon-512 support (updated from its original ephemeral-k1 design). EIP-8130 requires deploying PQ verifier contracts. [Full comparison →](/competing-standards#ecdsa-decoupling)
+EIP-8141 offers the most flexible PQ path (arbitrary account code plus `ARBITRARY` signature witnesses). EIP-8202 now includes native Falcon-512 support (updated from its original ephemeral-k1 design). EIP-8130 requires deploying PQ authenticator contracts and getting them into the canonical authenticator set. [Full comparison →](/competing-standards#ecdsa-decoupling)
 
 ---
 
@@ -166,7 +170,7 @@ Potentially. Mempool health is censorship resistance - if minimal nodes can't va
 
 **7.5. Can a frame transaction expire?**
 
-Yes. PR #11662 (merged May 14) added an expiry-verifier frame: a `VERIFY` frame targeting `address(0x8141)` whose `frame.data` is an 8-byte unix-seconds deadline. The canonical runtime reverts if the deadline has passed, and the public mempool drops the transaction as soon as the deadline is in the past. At most one such frame per transaction. [Spec details →](/current-spec#expiry-verifier-frame)
+Yes. PR #11662 (merged May 14) added an expiry-verifier frame: a `VERIFY` frame targeting `address(0x8141)` whose `frame.data` is an 8-byte unix-seconds deadline. The canonical runtime reverts if the deadline has passed, and the public mempool drops the transaction as soon as the deadline is in the past. At most one such frame is allowed, and if present it must be first. [Spec details →](/current-spec#expiry-verifier-frame)
 
 **7.6. What's the difference between EXPIRY_VERIFIER and EIP-8266 expiring nonces?**
 
@@ -206,7 +210,7 @@ Not through the public mempool or FOCIL. Frames structurally remove relayer trus
 
 **9.1. What are the alternatives to EIP-8141?**
 
-Four competing proposals: EIP-8175 (composable capabilities with programmable fee_auth), EIP-8130 (declared verifiers, no EVM in validation), EIP-8202 (scheme-agile flat transactions), and a Tempo-like proposal (fixed UX primitives). [Full comparison →](/competing-standards)
+Four competing proposals: EIP-8175 (composable capabilities with programmable fee_auth), EIP-8130 (declared authenticators, no wallet-code execution in validation), EIP-8202 (scheme-agile flat transactions), and a Tempo-like proposal (fixed UX primitives). [Full comparison →](/competing-standards)
 
 **9.2. Which is most likely to ship?**
 
@@ -214,7 +218,7 @@ Unclear. EIP-8141 is the most comprehensive but also the most complex. EIP-8130 
 
 **9.3. Can EIP-8130 be built on top of EIP-8141?**
 
-In principle yes. Declared verifiers are a subset of what VERIFY frames can do, while the reverse is not true. This is a key argument from EIP-8141 proponents. EIP-8130 authors contest the framing: their case is that a narrower primitive with no EVM in validation is better suited to performance chains regardless of whether it can be rebuilt on 8141. Both proposals remain active.
+In principle yes. Declared authenticators are a subset of what VERIFY frames can do, while the reverse is not true. This is a key argument from EIP-8141 proponents. EIP-8130 authors contest the framing: their case is that a narrower primitive with no wallet-code execution in validation is better suited to performance chains regardless of whether it can be rebuilt on 8141. Both proposals remain active.
 
 **9.4. What is EIP-8223 and how does it relate to EIP-8141?**
 

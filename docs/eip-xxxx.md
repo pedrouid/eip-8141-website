@@ -79,7 +79,7 @@ The bounded signature sizes (`MAX_WEBAUTHN_SIG_SIZE = 2,049 bytes`) and determin
 | Aspect | EIP-XXXX (Tempo-like) | EIP-8141 |
 |---|---|---|
 | **Philosophy** | Constrained primitives for common UX needs | General-purpose programmable framework |
-| **New opcodes** | None | 5 (`APPROVE`, `TXPARAM`, `FRAMEDATALOAD`, `FRAMEDATACOPY`, `FRAMEPARAM`) |
+| **New opcodes** | None | 6 (`APPROVE`, `TXPARAM`, `FRAMEDATALOAD`, `FRAMEDATACOPY`, `FRAMEPARAM`, `SIGPARAM`) |
 | **Tx type** | `0x76` | `0x06` |
 | **Composition model** | Flat call list, all-or-nothing | Recursive frames with modes and per-frame gas |
 | **Signature schemes** | Fixed set: secp256k1, P-256, WebAuthn | Arbitrary via account code + `APPROVE` |

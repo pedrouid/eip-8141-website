@@ -25,12 +25,12 @@ Every EOA gets the following behavior without opt-in, deployment, or signed auth
 
 1. Require `frame.target == tx.sender` unless the approval scope is payer-only (`0x1`). Any EOA can serve as a paymaster.
 2. Read approval scope from the flags field: `scope = frame.flags & 3`. If `scope == 0`, revert.
-3. Locate the entry in `tx.signatures` whose signer matches `frame.target` (the default code loops the outer list since contracts cannot hardcode an index). Read its `algorithm`:
-   - `0x0` (secp256k1): parse the signature, enforce low-`s`, reject failed `ecrecover`, require `frame.target == ecrecover(sig_hash, sig)`.
+3. Require `tx.signatures[0]` to be a `SECP256K1` entry with empty `msg` whose resolved signer equals the resolved frame target. Empty signer metadata resolves to `tx.sender`.
+   - `0x1` (`SECP256K1`): parse the signature, enforce low-`s`, reject failed `ecrecover`, require `resolved_target == ecrecover(sig_hash, sig)`.
    - Anything else: revert.
 4. Call `APPROVE(scope)`.
 
-PR #11481 (merged May 22) moved per-tx signatures out of `frame.data` and into a dedicated outer `signatures` list. The default code now reads from this list rather than from `frame.data`; the design accommodates a future block-level aggregated witness that could replace the per-tx list entirely. The signature-index discovery ergonomic (a contract cannot hardcode its index because the list may be reordered) lands as a known limitation: the default code does a linear scan. PR #11621 (merged May 11) removed the P256 (`0x1`) branch from default code. Hardware wallets and passkey-based accounts that previously relied on default-code P256 verification now have to ship that logic themselves (via deployed code or a future extension EIP). secp256k1 ECDSA is the only signature scheme that ships in the protocol-level default code.
+PR #11481 (merged May 22) moved per-tx signatures out of `frame.data` and into a dedicated outer `signatures` list. PR #11814 (merged Jul 7) then replaced the linear scan with the simpler index-0 default-code rule. The outer list now has three schemes: `ARBITRARY (0x0)`, `SECP256K1 (0x1)`, and `P256 (0x2)`. P256 is protocol-validated in the list, but PR #11621 (merged May 11) removed the P256 branch from default code. Hardware wallets and passkey-based accounts that need P256 must still ship that logic themselves (via deployed code, `SIGPARAM`, and custom verification, or via a future extension EIP). secp256k1 ECDSA is the only signature scheme that ships in the protocol-level default code.
 
 ### SENDER mode
 
@@ -65,7 +65,7 @@ Default code returns with empty data without performing any other action. PR #11
 | Authorization tx | Required `set_code` signing | None |
 | Delegate deployment | Required (deploy + audit) | None (protocol logic) |
 | Per-tx flexibility | Limited to delegate's features | Wallet composes per transaction |
-| Signature schemes | Whatever delegate implements | secp256k1 baked in (P256 removed from default code by PR #11621, May 11; accounts that need P256 must ship code) |
+| Signature schemes | Whatever delegate implements | secp256k1 baked in for codeless EOAs; P256 is an outer signature scheme but not accepted by default code |
 | Gas sponsorship | Delegate must implement | Any EOA via default VERIFY |
 | Reversal cost | Another `set_code` authorization | Nothing to reverse |
 
@@ -89,7 +89,7 @@ This composes with the [restrictive mempool tier](/mempool-strategy#restrictive-
 
 ### ERC-20 repayment: two independent paymaster patterns
 
-A related but distinct pattern is "user pays the sponsor back in ERC-20 tokens" (spec [Examples 2 and 5](/current-spec#practical-use-cases)). EIP-8141 supports two independent shapes for it. A **live ERC-20 paymaster (offchain)** runs a signing service that pre-validates the transaction off-chain; the payment VERIFY frame reads only the paymaster's own storage to check the signature, so the transaction propagates through the public restrictive mempool as a non-canonical paymaster (one pending tx per paymaster). A **permissionless ERC-20 paymaster (onchain)** uses frame introspection to confirm the ERC-20 transfer trustlessly; that introspection reads external contract storage and exceeds `storage reads only on tx.sender`, so the transaction is consensus-valid but does not propagate through the public mempool and routes through the expansive tier, a private mempool, or direct-to-builder submission. Both patterns are native to EIP-8141 and do not rely on ERC-4337. See [Mempool Strategy → ERC-20 gas repayment: two paymaster patterns](/mempool-strategy#erc20-paymaster-patterns).
+A related but distinct pattern is "user pays the sponsor back in ERC-20 tokens" (spec [Examples 2 and 5](/current-spec#practical-use-cases)). The current public-mempool shape is a **risk-accepting ERC-20 sponsor**: the sponsor's VERIFY frame checks sponsor authorization data and inspects the next SENDER frame to confirm it is an ERC-20 transfer of the right shape, but it does not read the user's token balance during validation. That propagates as a non-canonical paymaster subject to the one-pending-tx cap, while the sponsor accepts the frontrunning risk that the user can zero the ERC-20 balance before inclusion. A **trustless onchain balance-checking paymaster** remains consensus-valid, but because it reads external token storage during validation it routes through an expansive tier, private mempool, or direct-to-builder path. Both patterns are native to EIP-8141 and do not rely on ERC-4337. See [Mempool Strategy → ERC-20 gas repayment](/mempool-strategy#erc20-paymaster-patterns).
 
 ---
 
@@ -100,7 +100,7 @@ Default code covers the common case but not everything:
 - **Multisig authorization**: more than one signer
 - **Social recovery**: trusted parties rotating the signing key
 - **Session keys**: scoped, time-bounded keys with per-call rules
-- **Custom signature schemes** beyond secp256k1 (including P256 for hardware wallets and passkeys, after PR #11621 removed it from default code)
+- **Custom signature schemes** beyond default-code secp256k1 (including P256/passkeys in account code, despite P256 being protocol-validated in the outer signatures list)
 - **State-dependent validation**: rules reading more than `tx.sender`'s storage
 - **Non-trivial paymaster logic**: rate limiting, allowlists, etc.
 
@@ -110,7 +110,7 @@ Default code is the floor, not the ceiling. Custom validation that exceeds the r
 
 ## What Default Code Doesn't Do
 
-**Contract deployment**: uses a separate `deploy` frame targeting a stateless factory. EIP-7997 is canonical but non-mandatory after PR #11567; any factory satisfying the deploy-frame trace rules works, including custom CREATE2 deployers and EIP-7702 delegation installation. Default code's DEFAULT mode reverts.
+**Contract deployment**: uses a separate `deploy` frame targeting a stateless factory. EIP-7997 is canonical but non-mandatory after PR #11567; any factory satisfying the deploy-frame trace rules works, including custom CREATE2 deployers and EIP-7702 delegation installation. Default code's DEFAULT mode returns empty data; it does not deploy code by itself.
 
 **7702-delegated EOAs**: if an EOA has signed a `set_code` authorization, the delegate's code runs instead of default code. This is a real interoperability gap [identified by DanielVF](/current-spec#related-proposals): a wallet that 7702-delegates is on the hook for reimplementing what default code provided. EOAs that want default code behavior should not 7702-delegate.
 

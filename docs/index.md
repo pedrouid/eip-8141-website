@@ -13,7 +13,7 @@ hero:
       link: https://demo.eip-8141.ethrex.xyz/
 features:
   - title: Programmable Validation
-    details: Accounts define their own signature verification (ECDSA, P256, post-quantum) via the APPROVE opcode
+    details: Accounts define their own validation with frame code, protocol-validated signatures, and ARBITRARY witness bytes
   - title: Gas Sponsorship
     details: Third parties pay gas through sponsor VERIFY frames. No bundlers or relayers needed.
   - title: Atomic Batching
@@ -44,12 +44,12 @@ A frame transaction (`0x06`) consists of multiple **frames**, each with a mode t
 | Mode | Name | Purpose |
 |---|---|---|
 | `DEFAULT` | Deployment | Deploy accounts, run post-operation hooks |
-| `VERIFY` | Verification | Authenticate the sender, authorize payment. Read-only, must call `APPROVE`. |
+| `VERIFY` | Verification | Authenticate the sender, authorize payment. Read-only; approval-bearing validation frames call `APPROVE`. |
 | `SENDER` | Execution | Execute the user's intended operations (calls, transfers, contract interactions) |
 
 No bundler, no EntryPoint contract, no off-chain infrastructure. The protocol handles validation, gas payment, and execution natively through frames. SENDER frames execute with `msg.sender = tx.sender`, so existing contracts see the original account as the caller. Token approvals, NFT ownership, and all on-chain state work as-is.
 
-EOAs benefit directly without EIP-7702. The protocol has built-in fallback behavior for codeless accounts: VERIFY frames verify signatures (ECDSA or P256) and call `APPROVE` natively. Multi-call sequences come from the frame list (one SENDER frame per call) instead of a payload inside a single frame, with native ETH transfers via `frame.value`. No code is ever deployed to the EOA. With the atomic batch flag set in the `flags` field on consecutive SENDER frames, they become all-or-nothing, protecting users from partial execution.
+EOAs benefit directly without EIP-7702. The protocol has built-in fallback behavior for codeless accounts: VERIFY frames use the secp256k1 signature at `tx.signatures[0]` and call `APPROVE` natively. P256/passkeys are supported as protocol-validated outer signatures, but account code is needed to authorize with them. Multi-call sequences come from the frame list (one SENDER frame per call) instead of a payload inside a single frame, with native ETH transfers via `frame.value`. No code is ever deployed to the EOA. With the atomic batch flag set in the `flags` field on consecutive frames, they become all-or-nothing, protecting users from partial execution.
 
 ### Example A: Gasless Approve + Swap
 
@@ -77,18 +77,19 @@ An EOA at address A rebalances a Uniswap v4 liquidity position, paying for gas i
 | 5 | SENDER | Position Manager | `increaseLiquidity(...)` — add to new range |
 | 6 | DEFAULT | sponsor | Post-op: refund overcharged gas fees |
 
-> This example is the **permissionless ERC-20 paymaster (onchain)** variant, where the sponsor's VERIFY frame introspects the next SENDER frame to confirm the USDC transfer before approving payment. That introspection reads external contract state, so this specific shape is consensus-valid but does **not** propagate through the public (restrictive) mempool; wallets route it through the expansive tier, a private mempool, or direct-to-builder. A separate **live ERC-20 paymaster (offchain)** pattern, in which a paymaster service pre-signs the transaction, does propagate through the public mempool as a non-canonical paymaster (one pending tx per paymaster). Both patterns are native to EIP-8141 and independent of ERC-4337. See [Mempool Strategy → ERC-20 gas repayment: two paymaster patterns](/mempool-strategy#erc20-paymaster-patterns).
+> In the current public-mempool shape, the sponsor checks authorization data and frame structure rather than the user's token balance. That propagates as a non-canonical paymaster, but the sponsor accepts frontrunning risk if the user drains USDC before inclusion. A trustless balance-checking sponsor remains consensus-valid, but it reads external token storage and routes through the expansive tier, a private mempool, or direct-to-builder. See [Mempool Strategy → ERC-20 gas repayment](/mempool-strategy#erc20-paymaster-patterns).
 
 ## What are the new opcodes?
 
-EIP-8141 introduces five new opcodes that give frame transactions their power:
+EIP-8141 introduces six new opcodes that give frame transactions their power:
 
 | Opcode | Purpose |
 |---|---|
 | `APPROVE` | Terminates a VERIFY frame and sets transaction-scoped approval flags. Scope `0x1` approves payment, `0x2` approves execution, `0x3` approves both. |
 | `TXPARAM` | Reads transaction parameters (sender, nonce, fees) from inside a frame. Replaces `ORIGIN` for introspection. |
-| `FRAMEDATALOAD` | Loads 32 bytes from the current frame's `data` field. How account code reads signatures and calldata passed to a frame. |
+| `FRAMEDATALOAD` | Loads 32 bytes from the current frame's `data` field. How account code reads frame calldata. |
 | `FRAMEDATACOPY` | Copies frame data to memory. Bulk version of `FRAMEDATALOAD` for larger payloads. |
 | `FRAMEPARAM` | Reads frame-level metadata (mode, flags, resolved target). Enables frame code to introspect its own execution context. |
+| `SIGPARAM` | Reads signature-list metadata and copies `ARBITRARY` witness bytes for custom verifiers. |
 
-`APPROVE` is the central innovation: it's how account code tells the protocol "I've verified this transaction, proceed." The other four opcodes give frame code access to the transaction and frame context it needs to make that decision.
+`APPROVE` is the central innovation: it's how account code tells the protocol "I've verified this transaction, proceed." The other opcodes give frame code access to transaction, frame, and signature context it needs to make that decision.

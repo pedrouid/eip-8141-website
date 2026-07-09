@@ -4,7 +4,7 @@
 
 ## TL;DR
 
-Five general-purpose proposals sit on a spectrum from maximum generality (EIP-8141: arbitrary EVM in VERIFY frames) to maximum constraint (EIP-XXXX/Tempo: fixed UX primitives, no programmable validation). EIP-8141 and EIP-8130 are the two most active, both fully PQ-ready through different mechanisms: arbitrary account code vs. verifier contracts. EIP-8130 wins on mempool simplicity and performance; EIP-8141 wins on expressiveness and EOA defaults. Two complementary proposals (EIP-8223 and EIP-8224) cover static sponsorship and shielded gas funding, composing with any general-purpose design.
+Five general-purpose proposals sit on a spectrum from maximum generality (EIP-8141: arbitrary EVM in VERIFY frames) to maximum constraint (EIP-XXXX/Tempo: fixed UX primitives, no programmable validation). EIP-8141 and EIP-8130 are the two most active, both fully PQ-ready through different mechanisms: arbitrary account code vs. authenticator contracts. EIP-8130 wins on mempool simplicity and performance; EIP-8141 wins on expressiveness and EOA defaults. Complementary proposals cover static sponsorship, shielded gas funding, and PQ-safe address derivation, composing with a general-purpose design rather than replacing it.
 
 ---
 
@@ -12,8 +12,8 @@ Five general-purpose proposals sit on a spectrum from maximum generality (EIP-81
 
 "Competing" is not a single relationship. The proposals on this page fall into two groups:
 
-- **Competing general-purpose proposals** (EIP-8175, EIP-8130, EIP-8202, Tempo-like): these overlap with EIP-8141's scope. Each is a different bet on how to deliver native account abstraction, trading along several axes: more generality vs. more constraint, EVM-in-validation vs. declared verifiers, recursive frames vs. flat capabilities. A chain adopts one of these, not several.
-- **Complementary proposals** (EIP-8223, EIP-8224): these sit *off* the generality spectrum and compose with any of the above. EIP-8223 covers static gas sponsorship; EIP-8224 covers shielded gas funding. They do not replace a general-purpose AA format. They plug specific gaps a general-purpose format leaves open.
+- **Competing general-purpose proposals** (EIP-8175, EIP-8130, EIP-8202, Tempo-like): these overlap with EIP-8141's scope. Each is a different bet on how to deliver native account abstraction, trading along several axes: more generality vs. more constraint, EVM-in-validation vs. declared authenticators, recursive frames vs. flat capabilities. A chain adopts one of these, not several.
+- **Complementary proposals** (EIP-8223, EIP-8224, EIP-8215/HCA): these sit *off* the generality spectrum and compose with any of the above. EIP-8223 covers static gas sponsorship; EIP-8224 covers shielded gas funding; EIP-8215 covers PQ-safe address derivation for new accounts. They do not replace a general-purpose AA format. They plug specific gaps a general-purpose format leaves open.
 
 Read the tables below with this distinction in mind: the first half of the page compares EIP-8141 against its direct competitors; the sections on EIP-8223 and EIP-8224 describe how narrower primitives layer on top rather than replace.
 
@@ -29,13 +29,13 @@ The five general-purpose proposals sit on a spectrum (alternatives, you choose o
 More General                                                                More Constrained
     |                                                                             |
  EIP-8141       EIP-8175       EIP-8130       EIP-8202                      EIP-XXXX
- (arbitrary     (flat caps,    (verifier       (flat extensions,              (fixed UX
+ (arbitrary     (flat caps,    (authenticator  (flat extensions,              (fixed UX
   EVM in         programmable   contracts,     scheme-agile auth,            primitives,
   VERIFY         fee_auth)      no wallet      single execution)             passkeys)
   frames)                       code)
 ```
 
-Two complementary proposals sit off the spectrum (narrower scope, compose with any of the above):
+Complementary proposals sit off the spectrum (narrower scope, compose with any of the above):
 
 ```
                 Static Sponsorship                       Shielded Gas Funding
@@ -47,11 +47,13 @@ Two complementary proposals sit off the spectrum (narrower scope, compose with a
                   no EVM in validation)                    bootstrap problem)
 ```
 
+EIP-8215/HCA is another related proposal outside the transaction-format spectrum: it addresses PQ-safe address derivation for new accounts by deriving addresses from hash commitments to spending conditions.
+
 **EIP-8141** gives maximum flexibility: any account code can define any validation logic, multiple execution frames per transaction, atomic batching. The cost is mempool complexity (banned opcodes, gas caps, validation prefixes) and async execution incompatibility.
 
 **EIP-8175** provides flat capability composition with programmable gas sponsorship via fee_auth, but limits sender validation to fixed signature schemes. It started as "simpler than 8141" but evolved to include 4 new opcodes and EVM execution in the fee_auth prelude.
 
-**EIP-8130** makes validation programmable but operationally predictable through verifier contracts: any validation logic can be expressed inside a verifier, while the allowlist and known gas bounds give nodes predictable cost. It is also designed as a full cross-chain account standard. The constraint is that verifiers implement a pure `verify(hash, data) → ownerId` interface, which shapes how complex policies (time-based, state-dependent) need to be expressed.
+**EIP-8130** makes validation programmable but operationally predictable through authenticator contracts: signature logic is expressed inside an authenticator, while the canonical set and known gas bounds give nodes predictable cost. It is also designed as a full cross-chain account standard. The constraint is that authenticators implement a pure `authenticate(hash, data) -> actorId` interface; richer policies are handled through actor scope/policy and execution-time gates.
 
 **EIP-8202** takes a different angle entirely; it doesn't try to be an AA system. Instead, it solves signature agility and feature composition at the transaction envelope level. One execution payload, flat typed extensions, no new opcodes. The cost is no batching, no programmable validation, and no gas sponsorship (yet).
 
@@ -63,13 +65,13 @@ Two complementary proposals sit off the spectrum (narrower scope, compose with a
 |---|---|---|
 | **EIP-8141** | Arbitrary EVM in VERIFY frames. Account code defines its own sig scheme. No ECDSA dependency in the tx format. | Yes: any logic via account code + APPROVE |
 | **EIP-8175** | Fixed signature scheme set (secp256k1, Ed25519). New schemes require hard fork. | No: sender auth is cryptographic only |
-| **EIP-8130** | Declarative verifier contracts. Any sig scheme expressible inside a verifier (including PQ schemes). Nodes maintain allowlist. Fully PQ-ready: deploy a PQ verifier, nodes add to allowlist. | Yes: within the `verify(hash, data) → ownerId` interface |
+| **EIP-8130** | Declarative authenticator contracts. Any sig scheme expressible inside an authenticator (including PQ schemes). Nodes maintain a canonical authenticator set. Fully PQ-ready once a PQ authenticator is canonical. | Yes: within the `authenticate(hash, data) -> actorId` interface plus actor policy gates |
 | **EIP-8202** | Typed `scheme_id` in authorization (secp256k1, P256, Falcon-512). New schemes added per EIP. | No: fixed cryptographic check per scheme |
 | **EIP-XXXX** | Fixed set: secp256k1, P-256, WebAuthn. New schemes require hard fork. | No |
 | **EIP-8223** | secp256k1 sender only. Not a decoupling proposal. | No |
 | **EIP-8224** | fflonk ZK proof verification. Not a decoupling proposal. | No |
 
-Both EIP-8141 and EIP-8130 are fully PQ-ready, through different mechanisms. EIP-8141 achieves it via arbitrary account code in VERIFY frames. EIP-8130 achieves it via verifier contracts: deploy a contract implementing any PQ signature scheme, and nodes add it to their allowlist. The tradeoff is expressiveness vs. operational predictability: EIP-8141's VERIFY frames can run any EVM logic, while EIP-8130's verifiers are constrained to the pure `verify(hash, data) → ownerId` interface, which gives nodes bounded, predictable validation cost.
+Both EIP-8141 and EIP-8130 are fully PQ-ready, through different mechanisms. EIP-8141 achieves it via arbitrary account code in VERIFY frames plus `ARBITRARY` signature witnesses. EIP-8130 achieves it via authenticator contracts: deploy a contract implementing a PQ signature scheme, then add it to the canonical authenticator set. The tradeoff is expressiveness vs. operational predictability: EIP-8141's VERIFY frames can run any EVM logic, while EIP-8130's authenticators are constrained to the pure `authenticate(hash, data) -> actorId` interface, which gives nodes bounded, predictable validation cost.
 
 On key rotation: EIP-8130 has native onchain key rotation via `owner_config` changes, portable across chains. EIP-8141 delegates key management entirely to account code, with no protocol-level rotation mechanism. EIP-8223 offers key rotation for sponsored accounts via `authorize(newEOA)`.
 
@@ -79,7 +81,7 @@ On key rotation: EIP-8130 has native onchain key rotation via `owner_config` cha
 |---|---|---|
 | **EIP-8141** | VERIFY frame authorizes payer. Canonical paymaster recognized by runtime code match. Non-canonical limited to 1 pending tx. Any EOA can sponsor via default code. | Yes: protocol-blessed, mempool-validated |
 | **EIP-8175** | Programmable `fee_auth` contract with `RETURNETH` escrow. Sponsor state persists even if main tx reverts. | No: fee_auth is per-sponsor |
-| **EIP-8130** | `payer` + `payer_auth` fields. Payer authenticated via same verifier infrastructure as sender. | No: uses verifier allowlist |
+| **EIP-8130** | `payer` + `payer_auth` fields. Payer authenticated via same authenticator infrastructure as sender. | No: uses canonical authenticator set |
 | **EIP-8202** | `ROLE_PAYER` reserved but not yet defined. No sponsorship today. | No |
 | **EIP-XXXX** | `fee_payer_signature` field (secp256k1 only). Fee payer pays all gas. | No: direct co-signing |
 | **EIP-8223** | Canonical payer registry at `0x13`. Static validation (1 SLOAD + balance check). `tx.to` pays gas. | Yes: predeploy registry |
@@ -103,13 +105,13 @@ On key rotation: EIP-8130 has native onchain key rotation via `owner_config` cha
 |---|---|---|
 | **EIP-8141** | Implement new tx type. Default code covers EOAs with no smart account needed. | No bundlers, no relayers. Public mempool. |
 | **EIP-8175** | Implement new tx type. Compose capabilities + signatures. | No bundlers. fee_auth contracts for sponsorship. |
-| **EIP-8130** | Implement new tx type. Register owners via Account Configuration Contract. | Verifier contracts. Node allowlist coordination. |
+| **EIP-8130** | Implement new tx type. Register actors via Account Configuration Contract. | Authenticator contracts. Canonical-set coordination. |
 | **EIP-8202** | Implement new tx type. Existing secp256k1 EOAs keep their address. | Minimal: no new contracts. |
 | **EIP-XXXX** | Implement new tx type. P-256/WebAuthn create new addresses. | Minimal: no new contracts. |
 | **EIP-8223** | Implement new tx type. Payer calls `authorize(sender)` on registry. | Payer registry predeploy only. |
 | **EIP-8224** | Implement new tx type. User deposits into fee-note contract, generates ZK proof. | Fee-note contracts + proof generation tooling. |
 
-On EVM changes: EIP-8141 requires 5 new opcodes and a new frame execution model. EIP-8175 requires 4 new opcodes. EIP-8130 and all other proposals require zero EVM modifications, which simplifies client implementation and reduces the cross-client coordination burden. EIP-8130 achieves comparable programmability to EIP-8141 with a smaller protocol-change surface. EIP-8141's advantage is that default code gives EOAs AA features without smart account deployment or registration.
+On EVM changes: EIP-8141 requires 6 new opcodes and a new frame execution model. EIP-8175 requires 4 new opcodes. EIP-8130 and all other proposals require zero EVM modifications, which simplifies client implementation and reduces the cross-client coordination burden. EIP-8130 achieves comparable programmability to EIP-8141 with a smaller protocol-change surface. EIP-8141's advantage is that default code gives EOAs AA features without smart account deployment or registration.
 
 ### Mempool Strategy
 
@@ -117,19 +119,19 @@ On EVM changes: EIP-8141 requires 5 new opcodes and a new frame execution model.
 |---|---|---|
 | **EIP-8141** | EVM execution (capped at 100k gas) | High: validation prefix shapes, banned opcodes, canonical paymaster |
 | **EIP-8175** | Crypto sig verification + fee_auth EVM prelude | Medium: stateless sigs, but fee_auth simulation needed |
-| **EIP-8130** | STATICCALL to verifier (or native impl) | Medium: verifier allowlist, account lock optimization |
+| **EIP-8130** | STATICCALL to authenticator (or native impl) | Medium: canonical authenticator set, account lock optimization |
 | **EIP-8202** | ecrecover / P256VERIFY / Falcon-512 verify (deterministic) | Low: purely cryptographic, no EVM |
 | **EIP-XXXX** | ecrecover / P-256 / WebAuthn (bounded) | Low: deterministic crypto, bounded sig sizes |
 | **EIP-8223** | ecrecover + 1 SLOAD at `0x13` + balance check | Minimal: static reads only, no EVM |
 | **EIP-8224** | fflonk proof verify (~176K gas) + EXTCODEHASH check + fixed storage reads | Minimal: bounded crypto + static reads, no EVM |
 
-On tracing requirements: EIP-8141 is the only proposal that requires full EVM tracing during validation (banned opcode enforcement, storage access tracking, validation-prefix pattern matching). EIP-8175 requires partial tracing for fee_auth simulation. EIP-8130 avoids tracing entirely for allowlisted verifiers: nodes can implement hot-path signature algorithms natively and skip EVM execution, resulting in lower validation gas and minimal validation state. For unknown verifiers, EIP-8130 nodes can fall back to STATICCALL with gas caps, but the common path is trace-free.
+On tracing requirements: EIP-8141 is the only proposal that requires full EVM tracing during validation (banned opcode enforcement, storage access tracking, validation-prefix pattern matching). EIP-8175 requires partial tracing for fee_auth simulation. EIP-8130 avoids tracing entirely for canonical authenticators: nodes can implement hot-path signature algorithms natively and skip EVM execution, resulting in lower validation gas and minimal validation state. Non-canonical authenticators remain usable inside ordinary execution, but are not accepted for direct 8130 transaction authentication under the spec.
 
 ### Other Capabilities
 
 | Proposal | EOA Support | Account Creation | Async Execution | Cross-Chain |
 |---|---|---|---|---|
-| **EIP-8141** | Protocol-native default code (ECDSA + P256) | DEFAULT frame to deployer | Incompatible | Not addressed |
+| **EIP-8141** | Protocol-native default code (ECDSA secp256k1; P256 outer signatures require account code) | DEFAULT frame to deployer | Incompatible | Not addressed |
 | **EIP-8175** | secp256k1 native; Ed25519 creates new addresses | Not addressed | Partially (fee_auth needs EVM) | Not addressed |
 | **EIP-8130** | Implicit EOA authorization, auto-delegation | CREATE2 via `account_changes` | Compatible | Yes: `chain_id = 0` replays |
 | **EIP-8202** | secp256k1 EOAs keep address; P256/Falcon create new | Not addressed | Compatible | Not addressed |
@@ -147,6 +149,7 @@ Each proposal is covered in detail on its own page:
 - [EIP-XXXX: Tempo-like Transactions](/eip-xxxx)
 - [EIP-8223: Contract Payer Transaction](/eip-8223)
 - [EIP-8224: Counterfactual Transaction](/eip-8224)
+- [EIP-8215: Hash-Committed Account](https://github.com/ethereum/EIPs/pull/11480) (related PQ address derivation)
 
 
 ---
@@ -164,9 +167,9 @@ EIP-8141 defenders counter that the gas figure conflates ERC-4337 EntryPoint ove
 From the [Biconomy blog analysis](https://blog.biconomy.io/native-account-abstraction-state-of-art-and-pending-proposals-q1-26/):
 > "Base's position: 'We can heavily optimize this and build out performant mempool/block builder implementations,' something they can't do with EIP-8141's arbitrary validation frames."
 
-The EIP-8130 position: EIP-8141 loses on most operational metrics (higher gas cost for non-EOA validation, mempool tracing, no native key rotation, 5 new opcodes), while verifier contracts deliver comparable programmability with native hot-path implementations, no tracing, and built-in account management.
+The EIP-8130 position: EIP-8141 loses on most operational metrics (higher gas cost for non-EOA validation, mempool tracing, no native key rotation, 6 new opcodes), while authenticator contracts deliver comparable programmability with native hot-path implementations, no tracing, and built-in account management.
 
-EIP-8141 supporters counter that EIP-8130 can be built atop EIP-8141 (verifiers are a subset of what VERIFY frames can do) but not vice versa; that default code gives EOAs immediate AA without registration; and that VERIFY frames enable stateful and multi-step validation the pure verifier interface cannot express. The tension is structural: constrained pure-function validation for performance, or general EVM validation for expressiveness.
+EIP-8141 supporters counter that EIP-8130 can be built atop EIP-8141 (authenticators are a subset of what VERIFY frames can do) but not vice versa; that default code gives EOAs immediate AA without registration; and that VERIFY frames enable stateful and multi-step validation the pure authenticator interface cannot express. The tension is structural: constrained pure-function validation for performance, or general EVM validation for expressiveness.
 
 ### What EIP-8202's Authors Say About EIP-8141
 
@@ -183,15 +186,15 @@ The landscape splits along two axes:
 
 **Generality vs. deployability**: EIP-8141 is the most general (arbitrary EVM in VERIFY frames); constraint rises through EIP-8175, EIP-8130, EIP-8202, and EIP-XXXX. More generality means richer validation at the cost of mempool complexity and async-execution tradeoffs.
 
-**Scope**: EIP-8223 and EIP-8224 sit off the generality spectrum entirely. They address only sponsored gas and shielded gas funding, and compose with whatever general-purpose AA design ships.
+**Scope**: EIP-8223, EIP-8224, and EIP-8215/HCA sit off the generality spectrum. They address sponsored gas, shielded gas funding, and PQ-safe address derivation, and compose with whatever general-purpose AA design ships.
 
 Key practical splits:
 
-- **PQ readiness**: only EIP-8141 and EIP-8130 are fully PQ-ready through programmable validation. The others fix sender authentication to a known scheme set and need a hard fork to add more. See [PQ Roadmap](/pq-roadmap).
+- **PQ readiness**: EIP-8141 and EIP-8130 are fully PQ-ready through programmable validation/authentication. EIP-8215/HCA addresses a different PQ gap: new account addresses that are not derived from exposed public keys. See [PQ Roadmap](/pq-roadmap).
 - **Mempool simplicity**: EIP-8130 and the envelope-only proposals avoid EVM tracing during validation. EIP-8141 requires it, bounded by the restrictive tier's rules.
 - **EOA support**: EIP-8141's default code gives codeless EOAs the cheapest path. Other proposals require smart accounts, new addresses for new schemes, or delegation.
 - **Key rotation**: EIP-8130 has it natively (onchain `owner_config`). EIP-8141 delegates to account code. EIP-8223 offers it for sponsored accounts.
-- **Complementary stack**: the benaadams cluster (EIP-8141 + EIP-8223 + EIP-8224) is the only grouping designed to layer general AA, static sponsorship, and shielded bootstrap into a coherent whole.
+- **Complementary stack**: EIP-8141 can compose with narrower primitives such as EIP-8223, EIP-8224, and EIP-8215/HCA rather than forcing every sponsorship, privacy, or PQ-address concern into the base transaction type.
 
 ---
 
@@ -201,4 +204,3 @@ Key practical splits:
 - [EIP-8130](/eip-8130) or [EIP-8175](/eip-8175) — the two most active competitors.
 - [EIP-8223](/eip-8223) and [EIP-8224](/eip-8224) — the complementary proposals that layer on top of any general-purpose AA.
 - [Developer Tooling](/developer-tooling) — the wallet-adoption angle on why general vs constrained matters.
-

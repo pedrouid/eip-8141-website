@@ -676,3 +676,31 @@ EIP-2542 (2020, TXGASLIMIT/CALLGASLIMIT gas-introspection opcodes) is moved to W
 No change: the absorb-into-base amendment remains idle while the compose-by-requires sibling stack sets the direction; the architectural question is unchanged from Phase 20.
 
 **What to watch into Phase 22**: whether #11837 and #11814 merge, and which carries the signatures fix; whether EIP-8288 clears editorial review and merges; whether trebor's Example 3 clarification lands; whether the next Hegotá update promotes any AA-stack EIP to PFI; whether ERC-8286 advances past its CI failures toward editor review; and whether a fifth sibling EIP appears.
+
+## Phase 22: Signature Fix Lands and EIP-8288 Hits Proof-Security Review (Jul 1 - Jul 9)
+
+*The Phase 21 signatures-list regression is resolved in the spec through three July merges. The active uncertainty moves from "how do custom verifiers sign the canonical hash" to "how does the still-open PQ/STARK sibling prove recursive soundness." EIP-8130 also continues its finalization run, now under authenticator terminology.*
+
+### Arbitrary Signature Data Returns (Spec)
+
+*lightclient - PR #11837, merged Jul 6*
+
+PR #11837 lands the custom-verifier fix lightclient previewed in Phase 21. The signatures list gains `ARBITRARY = 0x0`; `SECP256K1` becomes `0x1`, `P256` becomes `0x2`. `ARBITRARY` entries have empty signer metadata, no protocol cryptographic validation, and raw bytes accessible through the new `SIGPARAM (0xb4)` copy operation. Protocol-validated raw signature bytes remain hidden from EVM code, preserving future aggregation. The canonical hash now elides raw signature bytes for signatures with empty `msg`, so custom witness bytes can be inserted after signing without reintroducing VERIFY-frame data elision.
+
+### Cleanup Locks Default Code and Public-Mempool Shape (Spec)
+
+*lightclient, morph-dev - PR #11870 merged Jul 6; PR #11814 merged Jul 7*
+
+PR #11870 clarifies that `APPROVE` and frame/signature introspection exceptional-halt outside frame transactions, and updates intrinsic gas to charge actual frame/signature data plus signature-validation cost. PR #11814 folds the repair into the execution and mempool text: default code now requires a `SECP256K1` signature at `tx.signatures[0]`; empty signer metadata defaults to `tx.sender`; expiry verifier may only be first; validation-prefix flags must match `APPROVE` scope; intrinsic signature validation counts under `MAX_VERIFY_GAS`; no `VERIFY` frame may appear after the validation prefix. The ERC-20 sponsor example is also corrected: public sponsors check frame/signature metadata and accept sponsee frontrunning risk instead of checking token balance onchain.
+
+### EIP-8288 Review Becomes a Proof-Security Review (Sibling)
+
+*jochem-brouwer, b-wagn, soispoke, mmjahanara - PR #11772, still open*
+
+EIP-8288 does not merge. jochem-brouwer requested editorial changes Jun 30, but the deeper July blocker is b-wagn's recursive-proof knowledge-soundness concern (Jul 3), with a suggested depth-counter public input. soispoke and mmjahanara continued LeanSTARK clarifications Jul 7-9. The Magicians thread remains quiet after Jun 17; the live review is now in GitHub.
+
+### EIP-8130 Keeps Finalizing (External)
+
+EIP-8130 lands PR #11847 on Jul 2 (actor-policy clarification and opaque metadata simplification) and PR #11903 on Jul 8 (renumbering `AA_TX_TYPE` to `0x79`, `AA_PAYER_TYPE` to `0x7A`, and adding `eth_call`/`eth_estimateGas` support for AA transaction fields). PR #11751, previously tracked as open, closed Jun 18. The alternative continues converging around "authenticator" rather than "verifier" language.
+
+**What to watch into Phase 23**: whether EIP-8288 resolves the recursive-proof concern; whether #11482, #11555, #11580, or #11681 revive after the signature cleanup; whether ERC-8286 gets editor review; whether any AA-stack EIP reaches Hegotá PFI; and whether the `SIGPARAM (0xb4)` / EIP-8272 opcode-space interaction gets explicitly reconciled.
