@@ -2,7 +2,7 @@
 
 Comprehensive analysis of [EIP-8141](https://eips.ethereum.org/EIPS/eip-8141) (Frame Transaction) - tracking its origin, evolution through community feedback, competing proposals, and open concerns.
 
-Last updated: July 9, 2026. Tracks EIP-8141 through PRs #11837, #11870, and #11814; EIP-8288 review through July 9; and EIP-8130 through PR #11903.
+Last updated: July 15, 2026. Tracks EIP-8141 through PRs #11837, #11870, and #11814; EIP-8288 review through July 9 (no change this sync); and EIP-8130 through PR #11918.
 
 ## Documents
 

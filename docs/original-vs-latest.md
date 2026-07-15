@@ -4,7 +4,7 @@
 
 ## Structural Comparison
 
-| Aspect | Original (Jan 29) | Latest (Jul 9) |
+| Aspect | Original (Jan 29) | Latest (Jul 15) |
 |---|---|---|
 | **Opcodes** | `APPROVE`, `TXPARAMLOAD`, `TXPARAMSIZE`, `TXPARAMCOPY` (4) | `APPROVE (0xaa)`, `TXPARAM (0xb0)`, `FRAMEDATALOAD (0xb1)`, `FRAMEDATACOPY (0xb2)`, `FRAMEPARAM (0xb3)`, `SIGPARAM (0xb4)` (6) |
 | **APPROVE mechanism** | Return codes 0-4 at top-level frame | Transaction-scoped with scope operand (0x1, 0x2, 0x3), callable at any depth, double-approval prevention |
@@ -89,7 +89,7 @@ The original spec deliberately had no `value` field in frames, on the principle 
 
 ## Active Proposals That May Change the Comparison
 
-As of July 9, 2026, several open PRs propose changes that would extend this comparison table:
+As of July 15, 2026, several open PRs propose changes that would extend this comparison table:
 
 | Proposal | PR | Impact |
 |---|---|---|

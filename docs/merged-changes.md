@@ -513,7 +513,7 @@ Three July merges fixed the June signatures-list regression in the base spec. Th
 
 ## Active/Open PRs
 
-*As of July 9, 2026.* These PRs represent active design proposals that may change the spec in the near future.
+*As of July 15, 2026.* These PRs represent active design proposals that may change the spec in the near future.
 
 ### PR #11482: Allow using precompiles for VERIFY frames (open since Apr 2)
 
