@@ -26,17 +26,6 @@
         </ul>
       </div>
       <div class="footer-col">
-        <h4>Alternatives</h4>
-        <ul>
-          <li><a href="/eip-8175">EIP-8175: Composable Transaction</a></li>
-          <li><a href="/eip-8130">EIP-8130: AA by Account Configuration</a></li>
-          <li><a href="/eip-8202">EIP-8202: Scheme-Agile Transactions</a></li>
-          <li><a href="/eip-8223">EIP-8223: Contract Payer Transaction</a></li>
-          <li><a href="/eip-8224">EIP-8224: Counterfactual Transaction</a></li>
-          <li><a href="/eip-xxxx">EIP-XXXX: Tempo-like Transactions</a></li>
-        </ul>
-      </div>
-      <div class="footer-col">
         <h4>Resources</h4>
         <ul>
           <li>
@@ -95,7 +84,7 @@
   max-width: calc(var(--vp-layout-max-width) - 64px);
   margin: 0 auto;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 32px;
 }
 
