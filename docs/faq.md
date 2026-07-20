@@ -22,7 +22,7 @@ No. It is a draft EIP under active development targeting a future hard fork. [Tr
 
 **1.5. What new opcodes does it introduce?**
 
-Five: `APPROVE` (authorize execution/payment), `TXPARAM` (read tx parameters), `FRAMEDATALOAD` and `FRAMEDATACOPY` (read frame data), `FRAMEPARAM` (read frame metadata like mode and flags). [Details →](/current-spec#the-approve-mechanism)
+Six: `APPROVE`, `TXPARAM`, `FRAMEDATALOAD`, `FRAMEDATACOPY`, `FRAMEPARAM`, and `SIGPARAM` (signature metadata and custom witness bytes). [Details →](/current-spec#transaction-structure)
 
 ---
 
@@ -98,6 +98,10 @@ Partly. The outer signatures list now includes `P256 (0x2)` as a protocol-valida
 
 Build a SENDER frame with `target = destination` and `value = amount`; no payload encoding needed. The per-frame `value` field was added by PR #11534 (Apr 16). Non-zero `value` is only valid in SENDER frames; DEFAULT and VERIFY frames must set `value = 0`. [See current spec →](/current-spec#transaction-structure)
 
+**4.8. Can one codeless EOA sponsor another codeless EOA?**
+
+Yes. Default code uses signature index `0` for the sender's execution approval and index `1` for a distinct payment-only EOA sponsor (PR #11954). The sponsor is non-canonical, so the public mempool allows only one pending transaction per sponsor.
+
 ---
 
 ## 5. Wallet Developers
@@ -116,7 +120,7 @@ Yes. Today, wallets depend on bundler providers (Pimlico, Alchemy, etc.) for AA 
 
 **5.4. What about gas sponsorship infrastructure?**
 
-For ETH-funded sponsorship (the sponsor pays the user's gas from its own ETH balance), wallets interact with the canonical paymaster directly at the protocol level. No paymaster service API, no vendor SDK, no third-party uptime dependency. For ERC-20 gas repayment, the public shape is a non-canonical sponsor that accepts frontrunning risk; a trustless balance-checking paymaster removes that risk but routes through the expansive tier, a private mempool, or direct-to-builder submission. [See 4.3 →](#4-users)
+For high-throughput ETH-funded sponsorship, wallets use the canonical paymaster. A codeless EOA can also sponsor through payment-only default code at signature index `1`, subject to the one-pending-transaction non-canonical cap. ERC-20 repayment retains the public risk-accepting versus private/expansive trustless split. [See 4.3 →](#4-users)
 
 **5.5. Can wallets still build custom validation logic?**
 
@@ -244,6 +248,22 @@ Yes. Frame transactions touch consensus, mempool policy, p2p propagation, client
 - [All related PRs](https://github.com/ethereum/EIPs/pulls?q=is%3Apr+8141)
 - [Ethereum Magicians discussion](https://ethereum-magicians.org/t/frame-transaction/27617)
 - [Statelessness concerns on ethresear.ch](https://ethresear.ch/t/frame-transactions-through-a-statelessness-lens/24538)
+
+**10.3. What is EIP-8141's Hegotá inclusion status?**
+
+It remains Considered for Inclusion (CFI), not Proposed for Inclusion (PFI). ACDE #241 on Jul 16 described it as the native-AA placeholder; no AA-stack proposal was promoted.
+
+**10.4. How are frame and signature bytes charged?**
+
+They pay normal per-token calldata cost plus the EIP-7623 calldata floor (PR #11941). The open PR #11969 proposes reconciling final payer and block-gas settlement explicitly against `charged_gas`.
+
+**10.5. What do frame receipt status values mean?**
+
+`0x0` means failure, `0x1` means success, and `0x2` means skipped after an atomic-batch failure. PR #11953 corrected the skipped value from `0x3`.
+
+**10.6. Did the sibling EIPs collide with EIP-8141's introspection assignments?**
+
+Yes, and the July fixes resolved them: EIP-8250 starts nonce-key selectors at `0x10` (#11966), while EIP-8272 uses count selector `0x0f` (#11930) and `RECENTROOTREFLOAD (0xb5)` (#11967).
 
 ---
 

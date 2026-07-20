@@ -79,7 +79,7 @@ On key rotation: EIP-8130 has native onchain key rotation via `owner_config` cha
 
 | Proposal | Sponsorship Model | Canonical Paymaster |
 |---|---|---|
-| **EIP-8141** | VERIFY frame authorizes payer. Canonical paymaster recognized by runtime code match. Non-canonical limited to 1 pending tx. EOAs can sponsor via default code when the index-0 signature rule composes. | Yes: protocol-blessed, mempool-validated |
+| **EIP-8141** | VERIFY frame authorizes payer. Canonical paymaster recognized by runtime code match. Non-canonical limited to 1 pending tx. A codeless sender uses signature index `0`; a payment-only codeless EOA sponsor uses index `1`. | Yes: protocol-blessed, mempool-validated |
 | **EIP-8175** | Programmable `fee_auth` contract with `RETURNETH` escrow. Sponsor state persists even if main tx reverts. | No: fee_auth is per-sponsor |
 | **EIP-8130** | `payer` + `payer_auth` fields. Payer authenticated via same authenticator infrastructure as sender. | No: uses canonical authenticator set |
 | **EIP-8202** | `ROLE_PAYER` reserved but not yet defined. No sponsorship today. | No |
@@ -168,6 +168,8 @@ From the [Biconomy blog analysis](https://blog.biconomy.io/native-account-abstra
 > "Base's position: 'We can heavily optimize this and build out performant mempool/block builder implementations,' something they can't do with EIP-8141's arbitrary validation frames."
 
 The EIP-8130 position: EIP-8141 loses on most operational metrics (higher gas cost for non-EOA validation, mempool tracing, no native key rotation, 6 new opcodes), while authenticator contracts deliver comparable programmability with native hot-path implementations, no tracing, and built-in account management.
+
+At [AllWalletDevs #40](https://ethereum-magicians.org/t/allwalletdevs-40-july-15-2026/28858) on Jul 15, EIP-8130 and ERC-8286 were presented side by side. The meeting summary records Chris Hunter saying Base plans to launch EIP-8130 in its September fork. A companion metadata layer also appeared as [ERC-8340](https://github.com/ethereum/ERCs/pull/1883), an open draft defining deterministic CBOR for EIP-8130's opaque `metadata` field. These are implementation and tooling signals, not changes to the core 8130 validation model.
 
 EIP-8141 supporters counter that EIP-8130 can be built atop EIP-8141 (authenticators are a subset of what VERIFY frames can do) but not vice versa; that default code gives EOAs immediate AA without registration; and that VERIFY frames enable stateful and multi-step validation the pure authenticator interface cannot express. The tension is structural: constrained pure-function validation for performance, or general EVM validation for expressiveness.
 

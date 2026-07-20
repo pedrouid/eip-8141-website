@@ -31,7 +31,7 @@ Three terms do most of the heavy lifting here. Plain-English versions first, lin
 | State growth at AA scale | Proposed: ~72 GB under VOPS+4; extra-VOPS reads pay [merkle branch cost](/mempool-strategy#the-merkle-branch-escape-hatch) |
 | Frames + FOCIL + VOPS trilemma | Proposed: [two-tier mempool + VOPS+4 + witness escape hatch](/mempool-strategy#resolving-the-trilemma) |
 | Witness-based FOCIL | Proposed: 4-8 kB today, 1-2 kB after binary tree migration |
-| Privacy pool state reads | Blocked: nullifier slots are hash-keyed in an external pool contract, outside VOPS+4. Routed via [canonical-pool exemption + validation-index FOCIL](/mempool-strategy#privacy-pools-three-gates) |
+| Privacy pool state reads | Partial: EIP-8272 makes declared recent roots pre-validated and introspectable, but nullifier slots remain hash-keyed in external pool storage outside VOPS+4. Routed via [canonical-pool exemption + validation-index FOCIL](/mempool-strategy#privacy-pools-three-gates) |
 | Implementation complexity | Open: compounds with other protocol changes |
 
 ---
@@ -56,11 +56,11 @@ The EIP-8141 co-authors argue all three are achievable per-transaction-class. Th
 
 ## Witness Costs for Extra-VOPS Reads
 
-For storage slots outside the VOPS+4 extension, transactions include a witness proving the state items they read. Simple cases (alternative sig algorithms, key rotation) add zero extra cost since their validation reads fit within VOPS+4. Privacy protocol withdrawals, which must verify nullifiers in external contract storage, add ~4 kB per proven item.
+For storage slots outside the VOPS+4 extension, transactions include a witness proving the state items they read. Simple cases (alternative sig algorithms, key rotation) add zero extra cost since their validation reads fit within VOPS+4. EIP-8272 avoids mutable-storage reads for declared recent application roots by moving them into a pre-validated transaction field, with `RECENTROOTREFLOAD (0xb5)` for validation-time access. Privacy protocol withdrawals still need nullifier state from external storage and add ~4 kB per proven item under the witness approach.
 
 The infrastructure already exists in clients (witness machinery is needed for sync), and binary tree migration further reduces the per-item cost. The framework accepts this as the explicit per-transaction cost of the escape hatch, limited to transactions that need it.
 
-**Counterpoint**: Witnesses solve the on-chain verifiability piece but not the mempool-admission piece. Privacy withdrawals fail three independent gates (public mempool gas caps, FOCIL per-IL budgets, and AA-VOPS node capability), each of which must be relaxed for these transactions to reach a block via public infrastructure. See [Mempool Strategy → Privacy Pools and the Three Gates](/mempool-strategy#privacy-pools-three-gates) for the canonical-pool exemption, raised VERIFY cap, and validation-index FOCIL proposals.
+**Counterpoint**: Witnesses solve the on-chain verifiability piece but not the mempool-admission piece. EIP-8272's recent-root path removes one shared-state read and now specifies bounded expiry/reorg eviction (PR #11961), but privacy withdrawals still fail on proof gas, FOCIL per-list budgets, and nullifier availability. See [Mempool Strategy → Privacy Pools and the Three Gates](/mempool-strategy#privacy-pools-three-gates) for the canonical-pool exemption, raised VERIFY cap, and validation-index FOCIL proposals.
 
 ## Implementation Complexity
 

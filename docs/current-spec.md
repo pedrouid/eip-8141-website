@@ -49,10 +49,12 @@ Signature schemes:
 | Scheme | Name | Protocol validation |
 |---|---|---|
 | `0x0` | `ARBITRARY` | No cryptographic validation by the protocol; `signer` must be empty. Raw bytes are introspectable through `SIGPARAM`. |
-| `0x1` | `SECP256K1` | `v || r || s`, low-`s`, signer is a 20-byte address or empty for `tx.sender`. |
+| `0x1` | `SECP256K1` | 65-byte `v || r || s`; `v` is `0` or `1`, and `r`/`s` are canonical with low-`s`. Signer is a 20-byte address or empty for `tx.sender`. |
 | `0x2` | `P256` | `r || s || qx || qy`, signer address is `keccak256(qx || qy)[12:]` or empty for `tx.sender`. |
 
 `SIGPARAM (0xb4)` exposes signature metadata to EVM code. It intentionally does not expose raw signature bytes for protocol-validated schemes, preserving future aggregation. For `ARBITRARY` entries, `SIGPARAM` can copy the raw witness bytes into memory so custom verifiers can validate schemes the protocol does not understand.
+
+Frame-data access has explicit stack order: `FRAMEDATALOAD` pops `offset` from the top and `frameIndex` next; `FRAMEDATACOPY` pops `memOffset`, `dataOffset`, `length`, then `frameIndex`. PR #11938 (merged Jul 17) pinned these previously implicit operand orders for client interoperability.
 
 ## Frame Modes
 
@@ -75,7 +77,7 @@ Signature schemes:
 **Stack**: `[offset, length, scope]` (with double-approval prevention: once a scope bit is set, it cannot be set again)
 
 **Scopes**:
-- `0x1`: Approve payment — increments nonce, collects gas fees from the account, sets `payer_approved = true`
+- `0x1`: Approve payment — increments the sender nonce, collects the transaction's maximum cost, and sets `payer` to the resolved target
 - `0x2`: Approve execution — sets `sender_approved = true` (only valid when `frame.target == tx.sender`)
 - `0x3`: Approve both execution and payment
 
@@ -86,13 +88,15 @@ Signature schemes:
 For each frame transaction:
 
 1. Check `tx.nonce == state[tx.sender].nonce`
-2. Initialize `sender_approved = false`, `payer_approved = false`
+2. Initialize `sender_approved = false`, `payer = None`
 3. For each frame, compute `resolved_target`: if `frame.target` is null, use `tx.sender`; otherwise use `frame.target`
 4. Execute each frame sequentially with `CALLVALUE = frame.value` at the top-level call (which is `0` except in `SENDER` frames):
    - **DEFAULT mode**: caller = `ENTRY_POINT`, execute as regular call to `resolved_target`
    - **VERIFY mode**: caller = `ENTRY_POINT`, execute as STATICCALL to `resolved_target`; approval-bearing validation frames must call `APPROVE`
    - **SENDER mode**: requires `sender_approved == true`, caller = `tx.sender`, target = `resolved_target`. If caller lacks balance for `frame.value`, the frame reverts (ordinary CALL value-transfer semantics).
-5. After all frames: verify `payer_approved == true`, refund unused gas to payer
+5. After all frames: verify `payer != None`, refund unpaid gas to the payer
+
+Execution approval is transaction-wide. Once `sender_approved` is set, every later `SENDER` frame is authorized, not only the frame the validator inspected. Custom validation must therefore commit to the complete later frame list or constrain every later `SENDER` frame before calling `APPROVE` (PR #11939, merged Jul 17).
 
 ## EOA Default Code
 
@@ -101,11 +105,12 @@ When `frame.target` has no code, the protocol applies built-in "default code" be
 **VERIFY mode:**
 1. Resolve the frame target (`null` means `tx.sender`). Execution approval is only valid for the sender.
 2. Read the approval scope from the flags: `allowed_scope = frame.flags & 3`. If `allowed_scope == 0`, revert.
-3. Require `tx.signatures[0]` to be a `SECP256K1` signature with empty `msg` whose resolved signer equals the resolved frame target.
-4. Rely on the protocol-validated secp256k1 signature over `compute_sig_hash(tx)`.
-5. Call `APPROVE(allowed_scope)`.
+3. Select the signature index by scope: index `0` when the scope includes execution, otherwise index `1` for payment-only approval.
+4. Require that entry to be a `SECP256K1` signature with empty `msg` whose resolved signer equals the resolved frame target.
+5. Rely on the protocol-validated secp256k1 signature over `compute_sig_hash(tx)`.
+6. Call `APPROVE(allowed_scope)`.
 
-PR #11481 (merged May 22) moved per-tx signatures out of `frame.data` and into a dedicated outer `signatures` list. PR #11814 (merged Jul 7) tightened default code to use the secp256k1 signature at index `0` instead of scanning for a matching signer. That index-0 rule means two distinct codeless EOAs cannot both authenticate through default VERIFY in the same transaction; one side needs account code or a paymaster contract. PR #11621 (merged May 11) removed the P256 branch from the protocol-shipped default code. P256 remains a protocol-validated outer signature scheme, but codeless EOAs still get only secp256k1 default-code authentication; accounts that need passkeys or other schemes use deployed code plus `SIGPARAM`/custom verification.
+PR #11481 (merged May 22) moved per-tx signatures out of `frame.data` and into a dedicated outer `signatures` list. PR #11814 (merged Jul 7) replaced the earlier scan with index `0`; PR #11954 (merged Jul 17) restored codeless EOA sponsorship by reserving index `1` for payment-only default VERIFY. A codeless sender can therefore authenticate at index `0` while a distinct codeless EOA sponsor authenticates at index `1` with the sponsor address in `sig.signer` (an empty signer resolves to `tx.sender`). PR #11621 (merged May 11) removed the P256 branch from the protocol-shipped default code. P256 remains a protocol-validated outer signature scheme, but codeless EOAs still get only secp256k1 default-code authentication; accounts that need passkeys or other schemes use deployed code plus `SIGPARAM`/custom verification.
 
 **SENDER and DEFAULT modes:** PR #11621 (merged May 11) changed default code so that `SENDER` and `DEFAULT` frames no longer revert. The previous behavior (revert unconditionally on both modes, plus an RLP-call-batch decoder removed by PR #11577 on Apr 29) blocked simple native ETH transfers to a fresh EOA via a frame transaction. After the merge, a `SENDER` or `DEFAULT` frame whose `resolved_target` has no code completes the value transfer and returns with empty data.
 
@@ -123,7 +128,7 @@ Frame 3: (atomic flag set)   ─│ Batch 2
 Frame 4: (flag not set)      ─┘
 ```
 
-If any frame in a batch reverts, the state is restored to before the batch started, and remaining frames in the batch are skipped. Skipped frames record receipt status `0x3` (introduced by PR #11621, merged May 11). The restrictive mempool tier separately forbids the atomic-batch flag inside the validation prefix, so this protocol-level expansion does not loosen what the public mempool admits. This enables safe patterns like "approve + swap" where both must succeed.
+If any frame in a batch reverts, the state is restored to before the batch started, and remaining frames in the batch are skipped. Skipped frames record receipt status `0x2`; PR #11953 (merged Jul 17) corrected the earlier draft value `0x3` because `0x2` is the next available status code. The restrictive mempool tier separately forbids the atomic-batch flag inside the validation prefix, so this protocol-level expansion does not loosen what the public mempool admits. This enables safe patterns like "approve + swap" where both must succeed.
 
 ## Gas Accounting
 
@@ -138,7 +143,11 @@ tx_gas_limit = (
 )
 ```
 
-Each frame incurs a per-frame cost of `FRAME_TX_PER_FRAME_COST` (475 gas) on top of the intrinsic cost. Gas is charged for the actual frame data and signature data bytes, not for an RLP-encoded aggregate payload. Protocol-validated signatures also add their intrinsic verification costs. Each frame has its own gas allocation. Unused gas is **not** carried to subsequent frames. After all frames execute, the total unused gas is refunded to the payer.
+Each frame incurs a per-frame cost of `FRAME_TX_PER_FRAME_COST` (475 gas) on top of the intrinsic cost. Gas is charged for the actual frame data and signature data bytes, not for an RLP-encoded aggregate payload. Protocol-validated signatures also add their intrinsic verification costs. Each frame has its own gas allocation. Unused gas is **not** carried to subsequent frames.
+
+PR #11941 (merged Jul 17) applies the EIP-7623 calldata floor to frame and signature data. Define `calldata_tokens` with EIP-7623's token count over those bytes; actual charged gas is the fixed intrinsic/per-frame/signature cost plus the larger of `(data cost + execution gas)` and `TOTAL_COST_FLOOR_PER_TOKEN * calldata_tokens`. The transaction must reserve enough gas for that floor even when execution is cheap.
+
+The merged text still calculates the later fee/refund path from `tx_gas_limit` and unused frame gas, so it can refund part of the new floor. Draft PR #11969 proposes settling payer escrow, block gas, and receipt gas consistently from `charged_gas`; that reconciliation is not yet part of the current spec.
 
 The total fee is:
 ```
@@ -293,13 +302,13 @@ The sponsor pays ETH gas; frame 2 repays the sponsor in ERC-20 tokens.
 | EIP-7702 | Complementary; 7702 accounts can also use frame transactions. Note: 7702-delegated accounts cannot currently use default code signature verification (gap identified by DanielVF) |
 | ERC-7562 | 8141's mempool rules are inspired by but simpler than 7562 (no staking/reputation) |
 | EIP-8175 | Competing alternative: flat capabilities + programmable fee_auth, 4 new opcodes |
-| EIP-8130 | Coinbase/Base's alternative: declared authenticators (formerly verifiers), no wallet code execution during validation, active through Jul 8. See [Competing Standards](./competing-standards) |
+| EIP-8130 | Coinbase/Base's alternative: declared authenticators (formerly verifiers), no wallet code execution during validation, active through Jul 20. See [Competing Standards](./competing-standards) |
 | EIP-7997 | Canonical deterministic factory predeploy; recommended for cross-chain-stable factory addresses but no longer a hard dependency after PR #11567 (merged Apr 30) |
 | EIP-7392 | Signature registry; interoperability PR #11455 was closed without merge on Apr 23 |
-| EIP-8250 | Keyed-nonces sibling EIP (PR #11598 merged May 11; PR #11749 merged Jun 1 generalized single keyed nonce to a bounded key set). First EIP whose `requires` header includes EIP-8141; layers `(nonce_keys, nonce_seq)` replay protection on top of EIP-8141 via a `NONCE_MANAGER` system contract |
+| EIP-8250 | Keyed-nonces sibling EIP (PR #11598 merged May 11; PR #11749 merged Jun 1 generalized single keyed nonce to a bounded key set). First EIP whose `requires` header includes EIP-8141; layers `(nonce_keys, nonce_seq)` replay protection on top of EIP-8141 via a `NONCE_MANAGER` system contract. July fixes restored the signatures field, priced nonce data under EIP-7623, and moved `TXPARAM_NONCE_KEY_0` to non-conflicting selector `0x10` (PR #11966) |
 | EIP-8266 | Expiring-nonces sibling EIP (PR #11692 merged May 22, co-authored by nerolation and lightclient); second EIP in the compose-by-requires AA stack, with `requires` including both EIP-8141 and EIP-8250. Sentinel-mode (`tx.nonce == 2**64 - 1`) plus a `NONCE_RING` system contract; complements PR #11662's per-tx `EXPIRY_VERIFIER` frame by scoping nonces themselves to time windows |
-| EIP-8272 | Recent-roots sibling EIP (PR #11726 merged Jun 5 by soispoke, vbuterin, nerolation); third compose-by-requires sibling, requires both EIP-7843 and EIP-8141. Adds a `recent_root_references` outer-envelope field, a `RECENT_ROOT_ADDRESS` system contract with 8192-slot ring, and a new `RECENTROOTREFLOAD` opcode. Note the opcode-space interaction: the latest EIP-8141 now assigns `0xb4` to `SIGPARAM`, so sibling opcode numbering needs coordination |
-| EIP-8288 (pending) | PQ signature and STARK aggregation sibling EIP (PR #11772 opened Jun 5 by vbuterin and Thomas Coratger); fourth compose-by-requires sibling. Still open as of Jul 15 with requested changes and proof-security review. Adds a new `DEP_VERIFY_FRAME_MODE = 3` frame mode declaring `(scheme, data_hash, verification_key)` dependencies, and a block-header `recursive_stark` field that aggregates all per-block dependencies into one recursive STARK using Lean Ethereum tooling (`LEANSPHINCS_SCHEME`, `LEANSTARK_SCHEME`). FOCIL-compatible |
+| EIP-8272 | Recent-roots sibling EIP (PR #11726 merged Jun 5 by soispoke, vbuterin, nerolation); third compose-by-requires sibling, requires both EIP-7843 and EIP-8141. Adds a `recent_root_references` outer-envelope field, a `RECENT_ROOT_ADDRESS` system contract with 8192-slot ring, `TXPARAM_RECENT_ROOT_REFERENCE_COUNT (0x0f)` (PR #11930), and `RECENTROOTREFLOAD (0xb5)` (PR #11967). July fixes also restored signatures and signature costs and hardened expiry/reorg mempool handling |
+| EIP-8288 (pending) | PQ signature and STARK aggregation sibling EIP (PR #11772 opened Jun 5 by vbuterin and Thomas Coratger); fourth compose-by-requires sibling. Still open as of Jul 20 with requested changes and proof-security review. Adds a new `DEP_VERIFY_FRAME_MODE = 3` frame mode declaring `(scheme, data_hash, verification_key)` dependencies, and a block-header `recursive_stark` field that aggregates all per-block dependencies into one recursive STARK using Lean Ethereum tooling (`LEANSPHINCS_SCHEME`, `LEANSTARK_SCHEME`). FOCIL-compatible |
 | ERC-8286 (draft) | First application-layer standard built on EIP-8141, and the first frame-transaction proposal in the ERCs repo (ERC PR #1794 opened Jun 3 by chiranjeev13). Defines how ERC-7579 modular accounts (validator, executor, hook, config modules) implement the frame-transaction validation flow: a validator module returns an approval mode the account applies via `APPROVE` during a VERIFY frame. Standardizes the permissions and session-key layer that protocol defaults leave open |
 
 ## Key Takeaway
@@ -309,6 +318,6 @@ A frame transaction is a sequence of purpose-labeled sub-calls. The protocol run
 ## Read Next
 
 - [EOA Support](/eoa-support) — what existing codeless accounts get for free, and how default code replaces EIP-7702 delegation for common cases.
-- [Feedback Evolution](/feedback-evolution) — how the spec got to its current shape through twenty-two phases of community review.
+- [Feedback Evolution](/feedback-evolution) — how the spec got to its current shape through twenty-three phases of community review.
 - [Mempool Strategy](/mempool-strategy) — why the validation prefix is the way it is, and how the two-tier mempool handles everything that doesn't fit.
 - [Competing Standards](/competing-standards) — how EIP-8141 compares to EIP-8130, EIP-8175, EIP-8202, and the sibling proposals.

@@ -180,6 +180,10 @@ The post proposes five protocol changes to create a viable inclusion path:
 
 Tradeoff acknowledged in the post: validation-index attesters absorb up to ~28% of block gas in the worst case within the 4-second deadline. Feasibility under stress and voluntary PS-node tracking of privacy pools remain open.
 
+EIP-8272 now covers one narrower part of this problem: transactions can declare recent application roots in the signed envelope and validation can read the verified roots without touching mutable pool storage. PR #11961 (merged Jul 18) hardened public-mempool handling by recommending an expiry margin, prompt eviction of expired references, and indexing pending transactions by reference and expiry slot. This helps recent-root availability and bounded eviction; it does not solve nullifier reads, proof cost, or the FOCIL gas budget.
+
+A Jul 15-17 [EIP-8272 discussion](https://ethereum-magicians.org/t/eip-8272-recent-roots-for-frame-transactions/28621/2) raised an alternative: encode recent roots in a canonical `VERIFY` frame, similar to `EXPIRY_VERIFIER`, rather than adding an envelope field and dedicated opcode. The tradeoff is envelope-level pre-execution checking and direct client indexing versus reusing EIP-8141's existing encoding while making frame position and client parsing part of the rule.
+
 See [VOPS Compatibility → Status](/vops-compatibility#status) for the state-side row on privacy-pool reads.
 
 ---
@@ -192,7 +196,7 @@ See [VOPS Compatibility → Status](/vops-compatibility#status) for the state-si
 - **Trilemma**: Frames + FOCIL + VOPS coexist for majority of traffic. Edge cases pay per-tx cost or use the expansive tier.
 - **Bitcoin pattern** (analogy): permissive consensus + restrictive mempool gives upgradability without hardforks.
 - **Relayer reduction** (proposed claim): privacy rebroadcasters and trustless ERC-20 balance-checking sponsors are expressible as onchain contracts running through the expansive tier or private mempool. Public ERC-20 sponsorship can propagate through the restrictive mempool as a non-canonical paymaster, but the sponsor accepts frontrunning risk. Whether onchain variants match bundler operational properties is open.
-- **Open questions**: canonical paymaster adoption (market-driven), propagation fragility (cross-client alignment), encrypted mempool routing (expansive tier), mempool health (FOCIL adoption), privacy pools and the [three gates](#privacy-pools-three-gates) (canonical-pool exemption + validation-index FOCIL + raised VERIFY caps proposed).
+- **Open questions**: canonical paymaster adoption (market-driven), propagation fragility (cross-client alignment), encrypted mempool routing (expansive tier), mempool health (FOCIL adoption), privacy pools and the [three gates](#privacy-pools-three-gates) (EIP-8272 handles recent roots, while canonical-pool exemption + validation-index FOCIL + raised VERIFY caps remain proposed).
 
 ---
 

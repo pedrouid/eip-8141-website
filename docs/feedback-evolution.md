@@ -706,3 +706,69 @@ EIP-8288 does not merge. jochem-brouwer requested editorial changes Jun 30, but 
 EIP-8130 lands PR #11847 on Jul 2 (actor-policy clarification and opaque metadata simplification) and PR #11903 on Jul 8 (renumbering `AA_TX_TYPE` to `0x79`, `AA_PAYER_TYPE` to `0x7A`, and adding `eth_call`/`eth_estimateGas` support for AA transaction fields). PR #11751, previously tracked as open, closed Jun 18. The alternative continues converging around "authenticator" rather than "verifier" language.
 
 **What to watch into Phase 23**: whether EIP-8288 resolves the recursive-proof concern; whether #11482, #11555, #11580, or #11681 revive after the signature cleanup; whether ERC-8286 gets editor review; whether any AA-stack EIP reaches Hegotá PFI; and whether the `SIGPARAM (0xb4)` / EIP-8272 opcode-space interaction gets explicitly reconciled.
+
+## Phase 23: Implementation Audit and Sibling Reconciliation (Jul 15 – Jul 20)
+
+*Implementation work exposes underspecified details across the base EIP and its siblings. Fixes land quickly, while wallet and core-dev forums clarify the competitive and governance context without moving EIP-8141 beyond CFI.*
+
+### Recent Roots: Envelope Field or Canonical Frame? (External)
+
+*forshtat, soispoke — EIP-8272 thread posts #2-3, Jul 15 – Jul 17*
+
+Forshtat asks whether recent roots need an envelope field and opcode when a canonical VERIFY frame could reuse the base encoding. Soispoke agrees the frame route could work, but notes the envelope enables pre-execution checks and direct indexing. No change follows.
+
+### Wallet Developers Compare ERC-8286 and EIP-8130 (External)
+
+*AllWalletDevs #40 — Jul 15*
+
+[AllWalletDevs #40](https://ethereum-magicians.org/t/allwalletdevs-40-july-15-2026/28858) presents ERC-8286 beside EIP-8130. Chris Hunter says Base plans the narrower authenticator model for its September fork, making the deployment competition concrete.
+
+### Hegotá Status Remains CFI (Governance)
+
+*ACDE #241 — Jul 16*
+
+The [ACDE #241 summary](https://ethereum-magicians.org/t/all-core-devs-execution-acde-241-july-16-2026/29001) calls frame transactions the CFI placeholder for native account abstraction. No proposal is promoted to PFI.
+
+### Skipped Receipt Status Corrected (Merged)
+
+*lightclient — PR #11953, merged Jul 17*
+
+PR #11953 changes skipped atomic-batch status from `0x3` to the next available value, `0x2`. With approvals already satisfied, the consensus-visible constant correction auto-merges without debate.
+
+### Base-Spec Implementation Audit Lands (Merged)
+
+*lightclient, svlachakis — PRs #11954, #11937-#11939, #11941, merged Jul 17*
+
+The audit restores codeless EOA sponsorship (#11954), pins signature and frame-data encoding, warns that execution approval covers all later sender frames, and applies the calldata floor. Review stays brief because each fix closes a concrete client or security ambiguity.
+
+### Recent-Root Selector Corrected (Merged)
+
+*AnkushinDaniil — PR #11930, merged Jul 18*
+
+PR #11930 moves EIP-8272's reference-count selector to `0x0f`, avoiding EIP-8250's assignment. Soispoke approves the one-line constant correction without objection.
+
+### Sibling Payloads and Mempool Rules Catch Up (Merged)
+
+*AnkushinDaniil — PRs #11931, #11959-#11961, #11963, merged Jul 18*
+
+The siblings regain inherited signature fields, hashing, and gas costs. For recent-root eviction, soispoke rejects a per-root pending cap because it would throttle privacy pools; reference/expiry indexing replaces it.
+
+### Keyed-Nonce Pricing and Selector Corrected (Merged)
+
+*AnkushinDaniil, soispoke — PRs #11958, #11966, merged Jul 19*
+
+EIP-8250 starts pricing nonce data under EIP-7623, then moves its first-key selector to `0x10`. Review retains token pricing for consistency; nerolation approves the selector and current `payer` wording.
+
+### Main Thread Returns to Operational Questions (External)
+
+*novenrizkia856-ui — post #165, Jul 19*
+
+Post #165 asks about shared-paymaster contention and `ORIGIN` compatibility with deployed `tx.origin` checks. No author response follows yet.
+
+### Recent-Root Opcode Collision Resolved (Merged)
+
+*soispoke — PR #11967, merged Jul 20*
+
+PR #11967 moves `RECENTROOTREFLOAD` from `0xb4`, now occupied by `SIGPARAM`, to `0xb5`. Nerolation approves the final structural collision fix without proposing an alternative.
+
+**What to watch into Phase 24**: approval/refund follow-ups (#11940, #11942, #11955-#11956, #11969, #11971), additive sibling rewrites, EIP-8288 proof security, and Hegotá status.

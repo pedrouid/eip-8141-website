@@ -2,7 +2,7 @@
 
 Comprehensive analysis of [EIP-8141](https://eips.ethereum.org/EIPS/eip-8141) (Frame Transaction) - tracking its origin, evolution through community feedback, competing proposals, and open concerns.
 
-Last updated: July 15, 2026. Tracks EIP-8141 through PRs #11837, #11870, and #11814; EIP-8288 review through July 9 (no change this sync); and EIP-8130 through PR #11918.
+Last updated: July 20, 2026. Tracks EIP-8141 through the July 17 implementation-clarification merges (#11953, #11954, #11937-#11941); EIP-8250/EIP-8272 corrections through #11967; the main discussion through post #165; and EIP-8130 through AllWalletDevs #40 plus draft ERC-8340.
 
 ## Documents
 
@@ -11,7 +11,7 @@ Last updated: July 15, 2026. Tracks EIP-8141 through PRs #11837, #11870, and #11
 | Document | Description |
 |---|---|
 | [Current Spec Overview](./docs/current-spec.md) | What EIP-8141 can do today - execution model, mempool model, transaction structure, opcodes, examples |
-| [Feedback Evolution](./docs/feedback-evolution.md) | How community feedback shaped the spec across 22 phases |
+| [Feedback Evolution](./docs/feedback-evolution.md) | How community feedback shaped the spec across 23 phases |
 | [Original Spec](./docs/original-spec.md) | The Jan 29 submission - original design and what it lacked |
 | [Merged Changes](./docs/merged-changes.md) | Every PR (merged, rejected, open) in chronological order with rationale |
 | [Original vs Latest](./docs/original-vs-latest.md) | Side-by-side comparison of structural changes and philosophical shifts |
@@ -37,10 +37,10 @@ Last updated: July 15, 2026. Tracks EIP-8141 through PRs #11837, #11870, and #11
 
 ## Updating
 
-To sync the repo with the latest spec changes, PRs, discussions, and competing standards, paste this prompt into a Claude Code session inside the repo:
+To sync the repo with the latest spec changes, PRs, discussions, and competing standards, paste this prompt into a Codex session inside the repo:
 
 ```
-Run the Update Process in CLAUDE.md.
+Run the Update Process in AGENTS.md.
 ```
 
 The agent will check master spec, new PRs since the last documented one, EthMagicians and ethresear.ch posts, competing standards activity, then update the relevant docs and refresh sync-snapshot dates per the methodology.

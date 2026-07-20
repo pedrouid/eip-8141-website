@@ -335,7 +335,7 @@ All reviewers approved by Apr 18; auto-merged on Apr 22 with no further debate.
 - **Why**: Two months of high-velocity merges (Phase 5 through Phase 9) left the spec text full of duplicated reasoning, stale section orderings, and inconsistencies between rationale and behavior. Opened explicitly as a readability sweep: "improve the EIP's readability without changing much functionality." A handful of small functional changes ride along where they fall out of the cleanup naturally.
 - **Spec changes** (+185/-345, net -160 lines):
   - **Restructure**: Spec body reorganized under `### Frame Transaction` with `#### Payload Encoding` and `#### Field Definitions` subsections. Field definitions are now centralized into a single bulleted list per object (outer payload, frame object) instead of scattered prose.
-  - **Skipped status**: Receipt status `0x3` introduced for frames skipped as part of an atomic batch (previously skipped frames had no distinct status).
+  - **Skipped status**: A distinct receipt status was introduced for frames skipped as part of an atomic batch (the May text used `0x3`; PR #11953 corrected it to `0x2` on Jul 17).
   - **FRAMEPARAM operand order**: Order of `FRAMEPARAM` operands explicitly defined (was implicit and inconsistent across rationale).
   - **Default code**: P256 signature scheme removed from default code (only ECDSA secp256k1 remains in the protocol-shipped default code).
   - **Default code on SENDER/DEFAULT**: default code does not revert on `SENDER` or `DEFAULT` frames so top-level value transfers to a default-code account work correctly. This is the visible functional change: the previous default code reverted unconditionally on those modes, breaking simple ETH transfers to a fresh EOA via a frame transaction.
@@ -432,7 +432,7 @@ The EthMagicians thread ([topic 28575](https://ethereum-magicians.org/t/eip-8266
 
 ## EIP-8250 Nonce Key Sets and EIP-8272 Recent Roots Merged — June 1 and June 5, 2026
 
-*Why this mattered: the compose-by-requires stack evolves on two fronts within one week. PR #11749 (June 1) ships EIP-8250's first post-merge revision, generalizing single keyed nonces to bounded key sets. PR #11726 / EIP-8272 (June 5) lands as the third sibling EIP in the stack with the broadest sibling-EIP spec change so far: new top-level transaction-payload field, new opcode (`RECENTROOTREFLOAD = 0xB4`), and a new system contract. The compose-by-requires pattern is now demonstrated to evolve in place (EIP-8250 itself updated post-merge) and to scale (three siblings, one with broad new spec surface), each with distinct authoring overlap among soispoke, vbuterin, nerolation, and lightclient.*
+*Why this mattered: the compose-by-requires stack evolves on two fronts within one week. PR #11749 (June 1) ships EIP-8250's first post-merge revision, generalizing single keyed nonces to bounded key sets. PR #11726 / EIP-8272 (June 5) lands as the third sibling EIP in the stack with the broadest sibling-EIP spec change so far: new top-level transaction-payload field, new opcode (originally `RECENTROOTREFLOAD = 0xB4`, moved to `0xB5` by #11967), and a new system contract. The compose-by-requires pattern is now demonstrated to evolve in place (EIP-8250 itself updated post-merge) and to scale (three siblings, one with broad new spec surface), each with distinct authoring overlap among soispoke, vbuterin, nerolation, and lightclient.*
 
 ### PR #11749: Add support for nonce key sets (EIP-8250 update)
 
@@ -451,7 +451,7 @@ The EthMagicians thread ([topic 28575](https://ethereum-magicians.org/t/eip-8266
 - **Spec changes** (+394/-0, single file `EIPS/eip-8272.md`):
   - **New outer-envelope field**: top-level `recent_root_references` list (max 16 entries per tx), each a `(source_id, slot, root)` tuple. Source identifiers are `keccak256(source_address || salt)` so a single writer publishes to multiple independent root streams. References target slots strictly before `current_slot`, which clients MUST obtain from the EIP-7843 `slotNumber` field rather than deriving from `block.timestamp`.
   - **New system contract**: `RECENT_ROOT_ADDRESS` accepts 64-byte calldata (`salt || root`); `msg.sender` becomes the source address; the entry is stored at `entries[S mod RECENT_ROOT_LENGTH]` keyed by `keccak256(RECENT_ROOT_STORAGE_DOMAIN || source_id || uint64_be(i))`. `RECENT_ROOT_LENGTH = 8192` slots per source. Per-source storage is bounded; total state grows with the number of distinct writers, not with reference volume.
-  - **New opcode**: `RECENTROOTREFLOAD = 0xB4` (gas 3) for validation-time read access to a verified reference's root; `TXPARAM(0x0D)` returns the reference count. First sibling-EIP-introduced opcode in the frame-transaction stack and the fifth opcode in the `0xB*` range after `TXPARAM`, `FRAMEDATALOAD`, `FRAMEDATACOPY`, `FRAMEPARAM`.
+  - **New opcode**: `RECENTROOTREFLOAD` (gas 3) for validation-time read access to a verified reference's root; the June merge assigned `0xB4` and `TXPARAM(0x0D)` for the reference count. July PRs #11967 and #11930 moved those to `0xB5` and `0x0F` to resolve collisions. First sibling-EIP-introduced opcode in the frame-transaction stack.
   - **Validation semantics**: references are checked after the EIP-8141 nonce check and before frame execution, against the transaction pre-state. Competing blocks at the same slot validate against their own pre-states. References are included in `compute_sig_hash(tx)` (not elided by the VERIFY-frame data-elision rule) and frame data MUST NOT mutate the reference set during execution.
   - **Requires header**: `7843, 8141`. EIP-7843 is the first non-8141 requirement in the sibling-EIP stack.
 - **Key review discussion**: abcoathup left a non-editor approving review on May 26 ("Looks good enough to merge as a draft"). The CI commit-graph errors from the initial submission were addressed in subsequent commits. lightclient signed off as EIP editor on June 5 and the bot fired the auto-merge minutes later.
@@ -511,9 +511,130 @@ Three July merges fixed the June signatures-list regression in the base spec. Th
 - **ERC-20 example correction**: public sponsors no longer check the user's ERC-20 balance onchain during validation. They check signature/frame metadata and accept the frontrunning risk that the user can drain token balance before inclusion.
 - **Why it matters**: turns the Phase 21 open question into settled spec text. The outer signatures list is now a concrete protocol surface with three scheme values, default-code index semantics, and explicit `SIGPARAM` introspection.
 
+## Skipped Receipt Status Correction — July 17, 2026
+
+*lightclient — PR #11953, merged July 17, 2026*
+
+- **Receipt model** (+2/-2): skipped atomic-batch frames now record `status = 0x2`, correcting the draft's `0x3` even though `0x2` was the next available status.
+- **Introspection**: `FRAMEPARAM(0x05)` now returns `0`, `1`, or `2` for failure, success, or skipped, so execution and receipt views agree.
+
+**Key review discussion**: The correction was submitted with all required approvals already satisfied and auto-merged without substantive reviewer objection.
+
+**Significance**: Changing a receipt-status constant is consensus-visible. Unlike the May cleanup that introduced a distinct skipped state, this merge pins its final wire value.
+
+## Base-Spec Implementation Clarifications — July 17, 2026
+
+Five additional implementation-review merges closed concrete interoperability, security, and accounting gaps in the base EIP. Together they repair one user-visible regression and pin behavior clients must agree on.
+
+### PR #11954: Allow EOA sponsor again
+
+**Author**: lightclient
+
+- **Why**: PR #11814's universal index-0 default-code rule made it impossible for a codeless sender and distinct codeless EOA sponsor to authenticate in one transaction.
+- **Change** (+2/-1): default VERIFY uses signature index `0` when approval includes execution and index `1` for payment-only approval. This restores contract-free EOA sponsorship while keeping fixed-position lookup.
+
+### PR #11937: Pin secp256k1 signature encoding
+
+**Author**: svlachakis
+
+- **Why**: the spec passed `v`, `r`, and `s` to `ecrecover` without defining whether `v` was typed-transaction y-parity or precompile-style `27/28`, and without requiring canonical `r`/`s`.
+- **Change** (+7/-2): `v` must be `0` or `1`; `r` must be in `(0, SECP256K1N)` and `s` in `(0, SECP256K1N/2]`. lightclient approved with “SGTM.”
+
+### PR #11938: Specify frame-data operand order
+
+**Author**: svlachakis
+
+- **Why**: `FRAMEDATALOAD` and `FRAMEDATACOPY` were the only frame opcodes whose prose did not pin which operand sat on top of the stack.
+- **Change** (+15/-5): explicit stack tables now define `offset` above `frameIndex` for load, and `memOffset`, `dataOffset`, `length`, `frameIndex` from top downward for copy. lightclient called it a “Nice catch.”
+
+### PR #11939: Document transaction-wide execution approval
+
+**Author**: svlachakis
+
+- **Why**: `sender_approved` is global for the transaction, but the security section did not warn that one approval authorizes every later `SENDER` frame.
+- **Change** (+8): validators must commit to the full frame list or otherwise constrain all later sender frames before approving execution; an explicit-message signature that does not bind the frames is insufficient by itself.
+
+### PR #11941: Apply the EIP-7623 calldata floor
+
+**Author**: svlachakis
+
+- **Why**: the gas formula priced frame/signature bytes per token but omitted EIP-7623's defining minimum floor, allowing large payloads to pay only the standard branch when execution was cheap.
+- **Change** (+26): introduces `calldata_tokens` and `charged_gas`; the data-plus-execution branch is floored by `TOTAL_COST_FLOOR_PER_TOKEN * calldata_tokens`, and the transaction must reserve enough gas for the floor.
+
+## Recent-Root Selector Correction — July 18, 2026
+
+*AnkushinDaniil — PR #11930, merged July 18, 2026*
+
+- **Introspection** (+1/-1): `TXPARAM_RECENT_ROOT_REFERENCE_COUNT` moves from stale selector `0x0d` to `0x0f`, avoiding EIP-8250's nonce-key count assignment.
+- **Layering**: the correction restores a unique selector map when EIP-8141, EIP-8250, and EIP-8272 are activated together.
+
+**Key review discussion**: EIP-8272 author soispoke approved the one-line correction without requesting further changes.
+
+**Significance**: This changes a transaction-introspection constant. It is the first of three July selector/opcode corrections needed to make the compose-by-requires stack internally consistent.
+
+## Sibling Payload and Mempool Corrections — July 18, 2026
+
+An implementation-driven audit propagated the repaired signatures-list and gas model into EIP-8250 and EIP-8272, while tightening activation and recent-root mempool handling.
+
+### PRs #11960 and #11931: Activation and signature-cost fixes
+
+**Author**: AnkushinDaniil
+
+- **#11960** (+2/-2): aligns `NONCE_MANAGER` activation with EIP-8272's parent-boundary formulation so fork-boundary reorg behavior is explicit.
+- **#11931** (+4/-1): restores EIP-8141 signature data and signature verification cost to EIP-8272's `tx_gas_limit` delta.
+- **Review**: soispoke approved both changes without further objections.
+
+### PRs #11959 and #11963: Restore signatures in sibling payloads (merged July 18)
+
+**Author**: AnkushinDaniil
+
+- **#11959** (+8/-8): restores `signatures` to EIP-8272's payload and aligns its sighash with EIP-8141 by eliding only empty-`msg` raw signature bytes, not VERIFY frame data.
+- **#11963** (+3/-3): makes the same payload and signature-hash correction in EIP-8250, yielding ten fields after replacing `nonce` with `nonce_keys` and `nonce_seq`.
+- **Review**: soispoke caught the remaining stale VERIFY-data-elision loop and missing signatures field before approving both fixes.
+
+### PR #11961: Strengthen recent-root public-mempool handling (merged July 18)
+
+**Author**: AnkushinDaniil
+
+- **Why**: many pending transactions can share a root that expires on the same slot boundary, so soft eviction guidance left a predictable cleanup spike.
+- **Change** (+5/-1): nodes SHOULD evict expired references, reject references near expiry using a small local margin, and index pending transactions by declared reference and expiry slot.
+- **Review**: soispoke rejected a proposed per-`(source_id, slot)` pending cap because it would throttle privacy-pool concurrency; efficient indexing replaced the cap.
+
+## Keyed-Nonce Gas Pricing — July 19, 2026
+
+### PR #11958: Price keyed-nonce payload data
+
+**Author**: AnkushinDaniil
+
+- **Why**: EIP-8250 added up to sixteen 32-byte keys plus a sequence without charging their bytes in the base gas formulas.
+- **Change** (+37/-9): defines `nonce_calldata = rlp(nonce_keys) || rlp(nonce_seq)`, prices it in `tx_gas_limit` and the execution branch of `charged_gas`, and includes it in the EIP-7623 floor; EIP-7623 is added to `requires`.
+- **Key review discussion**: soispoke required exact encoding and consistent placement in all three gas quantities. nerolation questioned token-vs-byte pricing; reviewers retained EIP-7623 token treatment for consistency with the base EIP.
+
+## Keyed-Nonce Selector Correction — July 19, 2026
+
+*soispoke — PR #11966, merged July 19, 2026*
+
+- **Introspection** (+8/-8): EIP-8250's `TXPARAM_NONCE_KEY_0` moves from base-owned `0x0b` to `0x10`, leaving the base selector range intact.
+- **Approval model**: the same patch aligns nonce-consumption and rollback wording with EIP-8141's current transaction-scoped `payer` model.
+
+**Key review discussion**: nerolation approved with “Lgtm” after soispoke marked the correction ready; no alternative assignment was proposed.
+
+**Significance**: This changes an introspection constant and approval text. It resolves the keyed-nonce half of the collision set identified during the July implementation audit.
+
+## Recent-Root Opcode Correction — July 20, 2026
+
+*soispoke — PR #11967, merged July 20, 2026*
+
+- **Opcode assignment** (+3/-1): EIP-8272's `RECENTROOTREFLOAD` moves from `0xb4`, now owned by EIP-8141's `SIGPARAM`, to `0xb5`.
+- **Execution behavior**: stack semantics and gas cost remain unchanged; only the consensus-visible opcode byte moves.
+
+**Key review discussion**: nerolation approved the collision fix after soispoke described it as straightforward; no reviewer argued for moving the base opcode instead.
+
+**Significance**: Changing an opcode assignment is structural. It closes the final known `0xb*` collision across the merged frame-transaction sibling stack.
+
 ## Active/Open PRs
 
-*As of July 15, 2026.* These PRs represent active design proposals that may change the spec in the near future.
+*As of July 20, 2026.* These PRs represent active design proposals that may change the spec in the near future.
 
 ### PR #11482: Allow using precompiles for VERIFY frames (open since Apr 2)
 
@@ -596,6 +717,78 @@ From vbuterin's PR description:
 
 > Adds a frame type for quantum-resistant Signature and STARK Aggregation. This supports signatures and STARKs (for privacy or for eg. L2s) in a post-quantum world in a highly gas-efficient way, by providing a way for transactions to declare them as "dependencies", in a way that allows the mempool and the block builder to replace them with a recursive STARK proving that they all exist.
 
+### PR #11935: Bound the signatures list (open since July 16)
+
+**Author**: svlachakis
+
+- **Why**: `signatures` is the only base variable-length list without an explicit count bound; empty `ARBITRARY` entries have zero signature gas and zero field-byte cost in the current formula.
+- **Proposed change**: add `MAX_SIGNATURES = 64` and reject longer lists.
+- **Status**: Open. lightclient prefers relying on the gas limit; svlachakis argues zero-cost empty entries can still force tens of thousands of pre-gas decode operations in a maximum-size transaction.
+
+### PR #11940: Specify EIP-3529 storage refund accounting (open since July 16)
+
+**Author**: svlachakis
+
+- **Why**: the base EIP does not define how storage refunds affect transaction gas used, receipts, payer charge, or reverted frame/batch journals.
+- **Proposed change**: one transaction-level refund counter with the EIP-3529 one-fifth cap.
+- **Status**: Open. soispoke requested explicit pre-refund/post-refund names, rollback semantics, the exact cap formula, and gross per-frame receipt gas.
+
+### PR #11942: Define receipt-network encoding (open since July 16)
+
+**Author**: svlachakis
+
+- **Why**: peers need a deterministic representation for the payer and per-frame receipt data used to reconstruct `receiptsRoot`.
+- **Proposed change**: encode frame transaction receipts in the fork's `Receipts` message as `[tx-type, cumulative-gas, payer, [[status, gas-used, logs], ...]]`.
+- **Status**: Open. lightclient supports keeping the encoding in the EIP until the matching devp2p protocol version specifies it.
+
+### PR #11955: Define approval rollback boundaries (open since July 17)
+
+**Author**: AnkushinDaniil
+
+- **Why**: a snapshot-based atomic-batch rollback can revert the nonce debit and collected maximum cost while leaving transaction-scoped `payer` set, creating an invalid refund path.
+- **Proposed change**: approval effects commit only when the enclosing frame succeeds, then survive later frame reverts and atomic-batch unrolls; invalid transactions and reorgs still discard them.
+- **Status**: Open. Review converged on per-scope effects and snapshot exemptions; the remaining point is that public-mempool simulation must continue until the enclosing frame completes, not stop at an inner `APPROVE`.
+
+### PR #11956: Batch sponsor repayment with user execution (open since July 17)
+
+**Author**: AnkushinDaniil
+
+- **Why**: Example 3 currently lets an ERC-20 repayment revert while a later unbatched user operation still executes on sponsor-paid gas.
+- **Proposed change**: the repayment begins an atomic batch and no `SENDER` frame may sit outside it; sponsor validation checks the complete frame list before approving payment.
+- **Status**: Open and intentionally ordered after #11955, whose approval-finality rule the example relies on.
+
+### PR #11968: Make EIP-8250 changes additive (draft since July 18)
+
+**Author**: soispoke
+
+- **Why**: restating the complete base payload and `charged_gas` formula can make EIP-8250 look like it replaces unrelated EIP-8141 changes.
+- **Proposed change**: define only the nonce-field replacement and additive gas/floor terms, leaving every other base field and rule inherited.
+- **Status**: Draft; bot reports author approvals are satisfied.
+
+### PR #11969: Apply charged_gas to fee settlement (draft since July 18)
+
+**Author**: soispoke
+
+- **Why**: PR #11941 defines `charged_gas`, but the later fee/refund text still settles from `tx_gas_limit` and `total_gas_used`, which can refund part of the calldata floor.
+- **Proposed change**: reserve `tx_gas_limit`, account block/receipt gas with `charged_gas`, collect maximum execution/blob cost, and refund the payer escrow and block gas pool separately.
+- **Status**: Draft; awaits an EIP-8141 author review.
+
+### PR #11970: Make EIP-8272 changes additive (draft since July 18)
+
+**Author**: soispoke
+
+- **Why**: EIP-8272's full payload and gas-formula restatement risks replacing newer base-spec fields and costs.
+- **Proposed change**: specify only insertion of `recent_root_references` and its additive data, intrinsic, floor, and activation rules.
+- **Status**: Draft; bot reports author approvals are satisfied.
+
+### PR #11971: Clarify decoding, signing, and activation (draft since July 19)
+
+**Author**: soispoke
+
+- **Why**: the base EIP leaves exact RLP shapes, non-mutating sighash construction, P256 validation rules, and `EXPIRY_VERIFIER` activation underspecified.
+- **Proposed change** (+38/-5): pin nine-element payload/six-element frame/four-element signature decoding, construct a separate signing payload, require EIP-7951 P256 validation, and define the activation-state transition.
+- **Status**: Draft; awaits an EIP-8141 author review.
+
 ---
 
 ## Rejected/Closed PRs
@@ -658,3 +851,31 @@ From vbuterin's PR description:
 
 - Proposed three fixes: a static `VERIFY` frame count check (`<= 2`); stale APPROVE-scope value updates in structural rules (`self_verify` → `APPROVE(0x3)`, `only_verify` → `APPROVE(0x2)`, `pay` → `APPROVE(0x1)`); and removal of the `frame.target != tx.sender` check from default `VERIFY` code to allow any EOA as paymaster. Inspired by node.cm's EthMagicians posts #135-136.
 - Sat open from Apr 6 with no reviewer activity. Closed without merge on May 14, three days after PR #11621 (frames cleanup) landed and absorbed the structurally compatible portions of the proposal. The remaining changes were either covered by #11521 (Apr 14) or no longer applied to the current spec.
+
+### PR #11932: Bound the signatures list (closed July 16)
+
+**Author**: AnkushinDaniil
+
+- Proposed `MAX_SIGNATURES = 64` for the unbounded outer list.
+- Closed without comment the next day. The same proposal continues as open PR #11935 by svlachakis.
+
+### PR #11957: Exclude keyed-nonce first-use gas from MAX_VERIFY_GAS (closed July 17)
+
+**Author**: AnkushinDaniil
+
+- Proposed excluding `KEYED_NONCE_FIRST_USE_GAS` from the public validation-prefix budget.
+- Self-withdrawn eleven minutes after opening. The author concluded the surcharge was the only bound on keyed-read amplification under the current exempt protocol-bookkeeping model and proposed pricing reads directly before revisiting the split.
+
+### PR #11964: Add EIP-8272 source_id test vector (closed July 18)
+
+**Author**: soispoke
+
+- Proposed a deterministic vector for `source_id = keccak256(source_address || salt)`.
+- Closed by the EIP-8272 author because the specification already pins 20-byte addresses plus 32-byte salts, making the 52-byte preimage unambiguous.
+
+### PRs #11972 and #11973: Activation and predeploy clarifications (closed July 19)
+
+**Author**: soispoke
+
+- #11972 proposed a `NONCE_MANAGER` collision guard and invalid-block rule for non-empty activation state; #11973 proposed non-mutating EIP-8272 sighash wording and a `RECENT_ROOT_ADDRESS != EXPIRY_VERIFIER` guard.
+- Both draft PRs were self-closed within minutes without a recorded rationale. Neither changed the merged specifications.
