@@ -42,6 +42,8 @@ Legacy transactions require a single account trie lookup. Frame transactions exe
 
 The [restrictive mempool tier](/mempool-strategy#restrictive-mempool-what-ships-first) bounds this: validation is limited to `tx.sender` storage, capped at 100,000 gas, with banned opcodes preventing reads outside the sender's state. The [VOPS+4 extension](/mempool-strategy#the-state-side-vops-4-slots) (nonce, balance, code, first 4 storage slots per account) covers well-designed AA wallets within a small constant-factor increase over the VOPS baseline.
 
+PR #12001 adds a client optimization for fully protocol-defined prefixes: nodes may evaluate default code, the expiry verifier, and the canonical paymaster directly instead of tracing EVM execution. Direct evaluation must preserve the exact dependency set, gas use, and `MAX_VERIFY_GAS` result. It reduces implementation work for common paths but does not change the VOPS boundary; any custom VERIFY code still needs the same bytecode and state slice.
+
 ## State Growth at Scale
 
 At N=4 storage slots per account, full AA adoption results in ~72 GB total VOPS size, an 8x increase from the ~10 GB floor. This is still well below the ~280 GB full state, but it is a significant regression from the VOPS baseline. The original AA-VOPS proposal did not address bytecode availability.

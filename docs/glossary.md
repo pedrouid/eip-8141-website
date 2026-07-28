@@ -22,23 +22,27 @@ A reference for the jargon that appears across this site. Entries are grouped by
 
 **Absorb-into-base** — The packaging pattern (PR #11681) that folds guarantors, keyed nonces, and signer binding directly into EIP-8141 under one `AUTH_MANAGER` contract, rather than shipping them as sibling EIPs. The open counterpoint to compose-by-requires.
 
-**APPROVE** — The central new opcode (`0xaa`). Terminates the current frame successfully and updates transaction-scoped approval flags (`sender_approved` and/or payer). Only callable when `ADDRESS == resolved_target`, and exceptional-halts outside frame-transaction execution. Takes a scope operand: `0x1` payment, `0x2` execution, `0x3` both. See [Current Spec → APPROVE mechanism](/current-spec#the-approve-mechanism).
+**APPROVE** — The central new opcode (`0xaa`). Terminates the current frame successfully and updates transaction-scoped approval flags (`sender_approved` and/or payer). Only callable when `ADDRESS == resolved_target`, and exceptional-halts outside frame-transaction execution. Takes a scope operand: `0x1` payment, `0x2` execution, `0x3` both. It has no base gas charge and pays only memory expansion, like `RETURN` (PR #12003). See [Current Spec → APPROVE mechanism](/current-spec#the-approve-mechanism).
 
 **Approval scope** — The subset of transaction-level approval a VERIFY frame grants. Encoded as bits 0-1 of `frame.flags`. Scopes are `0x1` (payment), `0x2` (execution), `0x3` (both). Double-approval prevention: once a scope bit is set, it cannot be set again.
 
-**Atomic batch** — A run of consecutive frames with bit 2 of `frame.flags` set. If any frame in the batch reverts, all preceding frames in the batch are reverted and the remaining are skipped. Enables safe "approve + swap" patterns. See [Current Spec → Atomic Batching](/current-spec#atomic-batching).
+**Atomic batch** — A run of consecutive DEFAULT or SENDER frames with bit 2 of `frame.flags` set. VERIFY cannot participate in or terminate a batch. If any frame in the batch reverts, all preceding frames in the batch are reverted and the remaining are skipped. Enables safe "approve + swap" patterns. See [Current Spec → Atomic Batching](/current-spec#atomic-batching).
 
 **AUTH_MANAGER** — The single system contract proposed by PR #11681 (absorb-into-base), holding both keyed-nonce streams and registered pubkey signers under one storage layout (EIP-4788 / EIP-2935 predeploy pattern).
 
-**Canonical paymaster** — A standardized paymaster contract whose runtime code is recognized by mempool policy via code-hash match. Pays gas from its own ETH balance (ETH-funded sponsorship); bypasses the `MAX_PENDING_TXS_USING_NON_CANONICAL_PAYMASTER = 1` limit and enables FOCIL compatibility. Removes ERC-7562's reputation/staking complexity. Handles ETH-funded sponsorship only; ERC-20 gas repayment is a separate non-canonical paymaster design space. See [Current Spec → Mempool Policy](/current-spec#mempool-policy) and [Mempool Strategy → ERC-20 gas repayment](/mempool-strategy#erc20-paymaster-patterns).
+**Blob sidecar** — The EIP-7594 pooled-transaction wrapper carrying blob transactions plus cells and proofs. Frame transactions support the same KZG versioned hashes, `BLOBHASH` access, networking path, and blob-fee settlement after PR #11985.
+
+**calldata_floor_gas** — The EIP-7623 minimum gas for the frame and signature payload. Final transaction `gas_used` cannot fall below it, even after EIP-3529 refunds.
+
+**Canonical paymaster** — A standardized paymaster contract whose runtime code is recognized by mempool policy via code-hash match. Pays gas from its own ETH balance (ETH-funded sponsorship); bypasses the `MAX_PENDING_TXS_USING_NON_CANONICAL_PAYMASTER = 1` limit and enables FOCIL compatibility. Removes ERC-7562's reputation/staking complexity. Handles ETH-funded sponsorship only; ERC-20 gas repayment is a separate non-canonical paymaster design space. Draft PR #12012 proposes its complete storage, signer, withdrawal, and code-hash lifecycle. See [Current Spec → Mempool Policy](/current-spec#mempool-policy) and [Mempool Strategy → ERC-20 gas repayment](/mempool-strategy#erc20-paymaster-patterns).
 
 **Canonical signature hash (sighash)** — `keccak(bytes([FRAME_TX_TYPE]) + rlp(tx_copy))` where `tx_copy` has raw `signature` bytes replaced with empty bytes for signature entries whose `msg` is empty. Raw signature bytes are elided so a signature over the canonical hash does not cover itself. The type-byte prefix follows the EIP-2718 convention for cross-type replay protection (PR #11544).
-
-**charged_gas** — The EIP-7623-aware gas quantity introduced by PR #11941. It adds fixed frame/signature costs to the larger of actual data-plus-execution gas and the calldata token floor. The base spec currently defines it before the older fee/refund text; draft PR #11969 proposes using it consistently for block accounting and payer settlement.
 
 **Compose-by-requires** — The architectural pattern where EIP-8141 owns the protocol primitive and sibling EIPs (EIP-8250, EIP-8266, EIP-8272, EIP-8288) layer specific policies on top via the `requires` header, instead of bundling them into the base spec. Contrast absorb-into-base.
 
 **Default code** — Protocol-level logic that runs when a frame targets an account with no deployed code and no EIP-7702 delegation. VERIFY uses secp256k1 at signature index `0` when approval includes execution and index `1` for payment-only EOA sponsorship (PR #11954); SENDER and DEFAULT return successfully after ordinary top-level call behavior. Makes EOAs first-class frame-transaction users. See [EOA Support](/eoa-support).
+
+**Direct evaluation** — A mempool optimization for validation prefixes composed only of protocol-defined default code, expiry-verifier code, or canonical-paymaster code. Clients may compute the result without EVM simulation only if dependencies, gas, and `MAX_VERIFY_GAS` remain identical (PR #12001).
 
 **ENTRY_POINT** — A protocol-defined distinguished caller address (`0xaa`) used as `CALLER` in DEFAULT and VERIFY frames. Not a deployed contract or precompile; contracts must not assume anything about its code, balance, or caller type beyond address equality. `CALLVALUE = 0` when the caller is `ENTRY_POINT`.
 
@@ -56,11 +60,17 @@ A reference for the jargon that appears across this site. Entries are grouped by
 
 **FRAMEPARAM** — Opcode `0xb3` introduced by PR #11521. Reads frame-level metadata by frame index: mode, flags, target, gas_limit, value, allowed_scope, and status.
 
+**gas_used** — Final transaction gas after applying the transaction-level EIP-3529 refund and enforcing `calldata_floor_gas`. Per-frame receipt gas stays gross and does not have to sum to this value.
+
 **Guarantor (APPROVE_GUARANTEE)** — A payer that pays even if sender validation fails (PR #11555, adopted by PR #11681), letting mempool nodes skip sender-validation simulation. Introduces approval scope `APPROVE_GUARANTEE = 0x4` and a transaction-scoped `guarantor_approved` flag.
 
 **Keyed nonces (2D nonce / nonce key set)** — Replay-protection sequences indexed by `(sender, key)` so an account can keep multiple independent in-flight nonce streams. EIP-8250's primitive, generalized to a bounded key set by PR #11749.
 
+**max_cost** — The payer escrow collected when payment is approved: `max_gas * max_fee_per_gas + blob_gas * blob_base_fee`. The final difference is returned as `payer_refund`.
+
 **MAX_FRAMES** — The per-transaction frame count limit. Currently `64`, reduced from `10^3` by PR #11521. Raisable later after empirical measurement; harder to lower once ecosystems depend on it.
+
+**max_gas** — The maximum of `standard_gas_limit` and `calldata_floor_gas`. It is used to reserve block gas and compute the payer's maximum execution cost.
 
 **MAX_VERIFY_GAS** — The 100,000-gas cap on the total validation-prefix gas consumption for public-mempool eligibility. The restrictive-tier guard against DoS from expensive validation.
 
@@ -70,6 +80,10 @@ A reference for the jargon that appears across this site. Entries are grouped by
 
 **payer** — Transaction-scoped address initialized to `None`. A successful payment-scoped `APPROVE` sets it to the resolved frame target, consumes the sender nonce, and collects the transaction's maximum cost. It must be non-null after all frames. Older revisions described the same condition as `payer_approved`.
 
+**Payer exposure** — The local maximum fee liability a mempool node reserves against one payer across pending transactions. Open PR #12007 proposes explicit reservation, revalidation, and eviction rules.
+
+**payer_refund** — The difference between the payer's collected `max_cost` and the final charged execution plus blob fee. It is returned after execution.
+
 **recent_root_references** — EIP-8272's outer-envelope field: a bounded list of `(source_id, slot, root)` tuples letting validation check application-state roots without reading mutable storage.
 
 **RECENT_ROOT_ADDRESS** — The system contract introduced by EIP-8272; an 8192-slot ring storing recent application-state roots, read during validation via the RECENTROOTREFLOAD opcode.
@@ -78,21 +92,27 @@ A reference for the jargon that appears across this site. Entries are grouped by
 
 **recursive_stark** — EIP-8288's proposed block-header field `[stark_proof, block_deps_hash]` aggregating all per-block DEP_VERIFY dependencies into one recursive STARK proof.
 
+**refund_counter** — One transaction-level EIP-3529 storage-refund counter shared across frames. Reverted frames and unrolled batches roll back their contributions; the final refund is capped at one-fifth of pre-refund gas.
+
 **resolved_target** — `frame.target if frame.target is not null else tx.sender`. Explicit name for the target-resolution rule used consistently throughout execution (introduced by PR #11521).
 
 **Self-relay** — The simplest recognized validation-prefix shape: a frame transaction whose sender pays its own gas (with a deploy-prefixed variant). One of the four restrictive-tier prefixes alongside the canonical-paymaster shapes.
 
 **sender_approved** — Transaction-scoped boolean flag flipped when a VERIFY frame with execution scope calls `APPROVE`. Must be `true` before any SENDER frame can execute. Paired with the transaction-scoped `payer` address; execution approval can only be set once per transaction.
 
-**Signatures list** — The outer-transaction `signatures` field (PR #11481, repaired by #11837/#11814): a list of `(scheme, signer, msg, signature)` objects. Protocol-validated schemes are `SECP256K1 (0x1)` and `P256 (0x2)`; `ARBITRARY (0x0)` carries custom witness bytes. Default code reads index `0` for execution scope and index `1` for payment-only EOA sponsorship after PR #11954.
+**Signatures list** — The outer-transaction `signatures` field (PR #11481, repaired by #11837/#11814): a list of `(scheme, signer, msg, signature)` objects. Protocol-validated schemes are `SECP256K1 (0x1)` and canonical low-`s` `P256 (0x2)`; `ARBITRARY (0x0)` carries custom witness bytes and costs 100 gas per entry. Default code reads index `0` for execution scope and index `1` for payment-only EOA sponsorship after PR #11954.
 
 **Signer binding** — A transaction-scoped `verified_signers` table (PR #11681) populated by non-secp256k1 VERIFY frames that prove `(digest, address)` against a registered pubkey, so `ECRECOVER` can return non-secp256k1-authenticated addresses on the hit path.
 
 **SIGPARAM** — Opcode `0xb4`. Reads signature-scoped metadata by signature index: scheme, resolved signer, message hash, and lengths. For `ARBITRARY` entries it can copy raw signature bytes into memory; for protocol-validated schemes raw signature bytes are intentionally not exposed.
 
+**standard_gas_limit** — Intrinsic gas, fixed frame and signature costs, data pricing, signature validation, and the sum of frame gas limits. It is the pre-floor execution-gas reservation used by `max_gas`.
+
 **TXPARAM** — Opcode `0xb0`. Reads transaction-level scalar parameters: sender, nonce, max fees, blob count, status, sighash, gas_limit, etc. Replaces the earlier TXPARAMLOAD trio.
 
-**Validation prefix** — The opening sequence of frames up to and including the frame that sets `payer`. Only these frames are subject to public-mempool policy; post-payment frames are arbitrary. Recognized prefixes: self-relay, canonical paymaster, and deploy-prefixed variants.
+**Validation prefix** — The opening sequence of frames up to and including the successfully completed frame that sets `payer`. Only these frames are subject to public-mempool policy; post-payment frames are arbitrary. Recognized prefixes: self-relay, canonical paymaster, and deploy-prefixed variants.
+
+**VERSIONED_HASH_VERSION_KZG** — The KZG version byte required for every frame-transaction blob hash. Added with full blob support in PR #11985.
 
 ---
 
@@ -150,7 +170,7 @@ A reference for the jargon that appears across this site. Entries are grouped by
 
 **BN254** — An elliptic curve used by EIP-8224's fflonk proofs and by the `ecPairing` precompile. Not quantum-safe on its own; used here for efficient pairing-based verification.
 
-**ARBITRARY signature** — Signature-list scheme `0x0`. The protocol performs no cryptographic validation and requires `signer` to be empty. Account code can read the raw bytes through `SIGPARAM` and validate any custom witness. If `msg` is empty, the raw bytes are elided from `compute_sig_hash(tx)`, so custom verifiers must enforce canonical encodings to avoid transaction-hash malleability.
+**ARBITRARY signature** — Signature-list scheme `0x0`. The protocol performs no cryptographic validation, requires `signer` to be empty, and charges 100 gas per entry. Account code can read the raw bytes through `SIGPARAM` and validate any custom witness. If `msg` is empty, the raw bytes are elided from `compute_sig_hash(tx)`, so custom verifiers must enforce canonical encodings to avoid transaction-hash malleability.
 
 **Dilithium** — A lattice-based post-quantum signature scheme (NIST FIPS 204). Candidate for a future PQ precompile alongside Falcon.
 
@@ -170,7 +190,7 @@ A reference for the jargon that appears across this site. Entries are grouped by
 
 **Nullifier** — A unique per-spend identifier used by privacy pools to prevent double-spending a shielded note. Stored in the pool contract's storage; reads are keyed by hash, making slot positions unpredictable and incompatible with fixed-N statelessness windows.
 
-**P256 (secp256r1)** — The NIST curve used by Apple/Google passkeys, WebAuthn, and hardware secure enclaves. Supported as protocol-validated outer signature scheme `0x2`, but not accepted by codeless EOA default code. Not post-quantum safe. Requires the [EIP-7951 P256 precompile](https://eips.ethereum.org/EIPS/eip-7951).
+**P256 (secp256r1)** — The NIST curve used by Apple/Google passkeys, WebAuthn, and hardware secure enclaves. Supported as protocol-validated outer signature scheme `0x2`, with canonical low-`s` required even though the precompile accepts high-`s`. It is not accepted by codeless EOA default code and is not post-quantum safe. Requires the [EIP-7951 P256 precompile](https://eips.ethereum.org/EIPS/eip-7951).
 
 **Passkey** — A platform-managed credential using WebAuthn + P256 signatures, typically stored in a device's secure enclave. EIP-8141 can carry P256 signatures in the outer list, but passkey-authenticated account authorization requires deployed account code or a future extension because default code accepts only secp256k1.
 
@@ -181,6 +201,8 @@ A reference for the jargon that appears across this site. Entries are grouped by
 **secp256k1** — The Koblitz curve used by Ethereum's EOA signatures. Paired with ECDSA; not quantum-safe. EIP-8141 scheme `0x1` uses a 65-byte `v || r || s` encoding with `v` in `{0, 1}` and canonical low-`s` values.
 
 **Signature aggregation** — Combining many individual signatures into a single succinct validity proof that the protocol checks once. Strategically important for PQ signatures (which are large); the VERIFY-frame architecture deliberately preserves the path forward. The outer `signatures` list ([PR #11481](https://github.com/ethereum/EIPs/pull/11481), merged May 22) adds the schema-level hook: a future block-level aggregated witness can elide individual per-tx signatures while preserving the commitments.
+
+**Signature-scheme registry** — The governed set of fixed-cost protocol signature IDs proposed by PR #12011. IDs `0x03` through `0xff` would pin the verifier, signer derivation, upgrade path, and aggregation behavior while retaining `ARBITRARY` as the custom-code escape hatch.
 
 **SPHINCS+** — A hash-based post-quantum signature scheme (NIST FIPS 205). Larger signatures than Dilithium/Falcon; referenced as one of the PQ candidates in the roadmap.
 
@@ -232,11 +254,15 @@ Proposals EIP-8141 depends on, supersedes, or interacts with. For full context o
 
 **[EIP-3074](https://eips.ethereum.org/EIPS/eip-3074)** — `AUTH`/`AUTHCALL` opcodes giving EOAs the ability to delegate authorization to contracts. Never shipped; its design principles feed into EIP-8141.
 
+**[EIP-3529](https://eips.ethereum.org/EIPS/eip-3529)** — Storage-refund rules, including the one-fifth refund cap. EIP-8141 uses one transaction-level refund counter across all frames after PR #11940.
+
 **[EIP-3607](https://eips.ethereum.org/EIPS/eip-3607)** — Rejects transactions from senders that have deployed code. Conflicted with frame transactions allowing contract-account senders; [PR #11272](https://github.com/ethereum/EIPs/pull/11272) (merged May 5, 2026) added EIP-3607 to the `requires` header with an explicit carve-out: the origination check does not apply to frame transactions, while non-frame transaction validation is unchanged.
 
-**[EIP-4844](https://eips.ethereum.org/EIPS/eip-4844)** — Blob transactions for L2 data availability. EIP-8141 carries blob fields (`max_fee_per_blob_gas`, `blob_versioned_hashes`); listed in `requires`.
+**[EIP-4844](https://eips.ethereum.org/EIPS/eip-4844)** — Blob transactions for L2 data availability. EIP-8141 validates KZG versioned hashes, exposes `BLOBHASH`, and includes blob gas in payer settlement.
 
-**[EIP-7623](https://eips.ethereum.org/EIPS/eip-7623)** — Calldata cost floor. EIP-8141 requires it and applies its token floor to frame and signature data through `charged_gas` (PR #11941); EIP-8250 also prices nonce-key data under the same rule after PR #11958.
+**[EIP-7594](https://eips.ethereum.org/EIPS/eip-7594)** — PeerDAS networking and pooled-transaction wrapper used to propagate frame transactions with blob cells and proofs (PR #11985).
+
+**[EIP-7623](https://eips.ethereum.org/EIPS/eip-7623)** — Calldata cost floor. EIP-8141 applies its token floor to frame and signature data through `calldata_floor_gas`; EIP-8250 also prices nonce-key data under the same rule after PR #11958.
 
 **[EIP-7702](https://eips.ethereum.org/EIPS/eip-7702)** — Lets an EOA delegate its code to a smart contract, transiently or persistently. EIP-8141's default code replaces EIP-7702 for common cases. 7702-delegated EOAs can still send frame transactions, but default code does not run; their delegated contract must implement `APPROVE`.
 

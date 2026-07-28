@@ -17,7 +17,7 @@ features:
   - title: Gas Sponsorship
     details: Third parties pay gas through sponsor VERIFY frames. No bundlers or relayers needed.
   - title: Atomic Batching
-    details: Group multiple operations into atomic batches that succeed or revert together at the protocol level
+    details: Group DEFAULT/SENDER operations into atomic batches that succeed or revert together
   - title: Post-Quantum Ready
     details: No ECDSA dependency in the transaction format. Accounts choose their own scheme with aggregation.
   - title: EOA Compatible
@@ -49,7 +49,7 @@ A frame transaction (`0x06`) consists of multiple **frames**, each with a mode t
 
 No bundler, no EntryPoint contract, no off-chain infrastructure. The protocol handles validation, gas payment, and execution natively through frames. SENDER frames execute with `msg.sender = tx.sender`, so existing contracts see the original account as the caller. Token approvals, NFT ownership, and all on-chain state work as-is.
 
-EOAs benefit directly without EIP-7702. The protocol has built-in fallback behavior for codeless accounts: VERIFY frames use the secp256k1 signature at `tx.signatures[0]` and call `APPROVE` natively. P256/passkeys are supported as protocol-validated outer signatures, but account code is needed to authorize with them. Multi-call sequences come from the frame list (one SENDER frame per call) instead of a payload inside a single frame, with native ETH transfers via `frame.value`. No code is ever deployed to the EOA. With the atomic batch flag set in the `flags` field on consecutive frames, they become all-or-nothing, protecting users from partial execution.
+EOAs benefit directly without EIP-7702. The protocol has built-in fallback behavior for codeless accounts: VERIFY frames use the secp256k1 signature at `tx.signatures[0]` and call `APPROVE` natively. P256/passkeys are supported as canonical low-`s` protocol-validated outer signatures, but account code is needed to authorize with them. Multi-call sequences come from the frame list (one SENDER frame per call) instead of a payload inside a single frame, with native ETH transfers via `frame.value`. No code is ever deployed to the EOA. With the atomic batch flag set on consecutive DEFAULT or SENDER frames, they become all-or-nothing, protecting users from partial execution; VERIFY cannot participate in or terminate a batch.
 
 ### Example A: Gasless Approve + Swap
 

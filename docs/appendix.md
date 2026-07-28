@@ -68,25 +68,33 @@
 | Jul 19 | [#11958](https://github.com/ethereum/EIPs/pull/11958) | AnkushinDaniil | Price EIP-8250 nonce keys and sequence as EIP-7623 transaction data |
 | Jul 19 | [#11966](https://github.com/ethereum/EIPs/pull/11966) | soispoke | Move EIP-8250's first nonce-key selector to `0x10` and align approval wording |
 | Jul 20 | [#11967](https://github.com/ethereum/EIPs/pull/11967) | soispoke | Move EIP-8272 `RECENTROOTREFLOAD` from colliding `0xb4` to `0xb5` |
+| Jul 20 | [#11976](https://github.com/ethereum/EIPs/pull/11976) | lightclient | Price each `ARBITRARY` signature entry at 100 gas |
+| Jul 20 | [#11942](https://github.com/ethereum/EIPs/pull/11942) | svlachakis | Define frame receipt encoding for the fork's `Receipts` message |
+| Jul 21 | [#11955](https://github.com/ethereum/EIPs/pull/11955) | AnkushinDaniil | Exclude VERIFY frames from atomic batches and wait for the payer-setting frame to finish |
+| Jul 21 | [#11940](https://github.com/ethereum/EIPs/pull/11940) | svlachakis | Define transaction-level EIP-3529 refund accounting and gross frame receipt gas |
+| Jul 21 | [#11984](https://github.com/ethereum/EIPs/pull/11984) | svlachakis | Require canonical low-`s` P256 signatures and add `SECP256R1N` |
+| Jul 21 | [#11987](https://github.com/ethereum/EIPs/pull/11987) | lightclient | Restrict atomic flags to DEFAULT/SENDER and statically exclude VERIFY |
+| Jul 23 | [#11985](https://github.com/ethereum/EIPs/pull/11985) | svlachakis | Add full blob and EIP-7594 pooled-transaction support |
+| Jul 23 | [#12001](https://github.com/ethereum/EIPs/pull/12001) | svlachakis | Allow equivalent direct evaluation of protocol-defined validation prefixes |
+| Jul 23 | [#12003](https://github.com/ethereum/EIPs/pull/12003) | AnkushinDaniil | Set APPROVE base gas to zero, charging only memory expansion |
+| Jul 23 | [#12005](https://github.com/ethereum/EIPs/pull/12005) | svlachakis | Bound execution and blob fee fields below `2**256` |
+| Jul 28 | [#11969](https://github.com/ethereum/EIPs/pull/11969) | soispoke | Complete gas, refund, payer, receipt, and blob-fee settlement |
 
 ### Open
 
 | Date | PR | Author | Description |
 |---|---|---|---|
-| Apr 2 | [#11482](https://github.com/ethereum/EIPs/pull/11482) | derekchiang | Allow precompiles for VERIFY frames (all reviewers approved) |
-| Apr 22 | [#11555](https://github.com/ethereum/EIPs/pull/11555) | derekchiang | Add support for guarantors (payer covers gas even if sender validation fails) |
+| Apr 2 | [#11482](https://github.com/ethereum/EIPs/pull/11482) | derekchiang | Draft, merge-conflicted proposal to allow precompiles for VERIFY frames |
+| Apr 22 | [#11555](https://github.com/ethereum/EIPs/pull/11555) | derekchiang | Draft, merge-conflicted guarantor proposal |
 | Apr 29 | [#11580](https://github.com/ethereum/EIPs/pull/11580) | lightclient | Allow payer to approve before sender (draft; alternative to #11555 guarantors) |
 | May 16 | [#11681](https://github.com/ethereum/EIPs/pull/11681) | pedrouid | Extend EIP-8141 with guarantors, keyed nonces, and signer binding via a `signer` envelope field and an `AUTH_MANAGER` system contract; +810/-74 lines. Successor to closed #11643 after PR #11662 settled the expiry design |
-| Jun 5 | [#11772](https://github.com/ethereum/EIPs/pull/11772) | vbuterin, Thomas Coratger | Add EIP-8288: Frame type for PQ sig and STARK aggregation (`eip-8288.md`, +508 lines). Fourth compose-by-requires sibling EIP. Still open as of Jul 20 with requested changes and proof-security review around recursive STARK soundness |
-| Jul 16 | [#11935](https://github.com/ethereum/EIPs/pull/11935) | svlachakis | Add `MAX_SIGNATURES = 64`; review debates explicit bounds versus gas/transaction-size limits |
-| Jul 16 | [#11940](https://github.com/ethereum/EIPs/pull/11940) | svlachakis | Define transaction-level EIP-3529 storage-refund accounting for frames |
-| Jul 16 | [#11942](https://github.com/ethereum/EIPs/pull/11942) | svlachakis | Define frame receipt encoding for the fork's `Receipts` message |
-| Jul 17 | [#11955](https://github.com/ethereum/EIPs/pull/11955) | AnkushinDaniil | Define approval-effect commit and rollback boundaries |
-| Jul 17 | [#11956](https://github.com/ethereum/EIPs/pull/11956) | AnkushinDaniil | Atomically batch ERC-20 sponsor repayment with all SENDER operations |
-| Jul 18 | [#11968](https://github.com/ethereum/EIPs/pull/11968) | soispoke | Draft: express EIP-8250 as additive changes to EIP-8141 |
-| Jul 18 | [#11969](https://github.com/ethereum/EIPs/pull/11969) | soispoke | Draft: use `charged_gas` for block accounting and payer settlement |
-| Jul 18 | [#11970](https://github.com/ethereum/EIPs/pull/11970) | soispoke | Draft: express EIP-8272 as additive changes to EIP-8141 |
-| Jul 19 | [#11971](https://github.com/ethereum/EIPs/pull/11971) | soispoke | Draft: pin RLP decoding, non-mutating sighash, P256 rules, and EXPIRY_VERIFIER activation |
+| Jun 5 | [#11772](https://github.com/ethereum/EIPs/pull/11772) | vbuterin, Thomas Coratger | Add EIP-8288: Frame type for PQ sig and STARK aggregation (`eip-8288.md`, +508 lines). Fourth compose-by-requires sibling EIP. Still open with requested changes and proof-security review around recursive STARK soundness |
+| Jul 18 | [#11968](https://github.com/ethereum/EIPs/pull/11968) | soispoke | Draft additive EIP-8250 delta; gas wording predates merged #11969 |
+| Jul 18 | [#11970](https://github.com/ethereum/EIPs/pull/11970) | soispoke | Express EIP-8272 as additive changes to EIP-8141; ready for review |
+| Jul 23 | [#12007](https://github.com/ethereum/EIPs/pull/12007) | svlachakis | Define replacement, fee bumps, per-payer exposure, revalidation, and eviction |
+| Jul 23 | [#12008](https://github.com/ethereum/EIPs/pull/12008) | svlachakis | Define transaction logs as successful frame logs in execution order |
+| Jul 24 | [#12011](https://github.com/ethereum/EIPs/pull/12011) | AnkushinDaniil | Formalize the protocol signature-scheme registry |
+| Jul 24 | [#12012](https://github.com/ethereum/EIPs/pull/12012) | svlachakis | Draft a complete canonical-paymaster implementation and lifecycle |
 
 ### Related
 
@@ -98,7 +106,7 @@
 | Apr 12 | [#11518](https://github.com/ethereum/EIPs/pull/11518) | benaadams | Add EIP-8224: Counterfactual Transaction (shielded gas funding via ZK proofs) |
 | Apr 22 | [#11438](https://github.com/ethereum/EIPs/pull/11438) | Giulio2002 | Add EIP-8202: Scheme-Agile Transactions (alternative AA proposal; PQ signatures on L1 without general AA) |
 | Apr 25 | [#11571](https://github.com/ethereum/EIPs/pull/11571) | SirSpudlington | Update EIP-7932: refactor signature registry to be friendlier to EIP-8141 (rename `sigrecover` → `sigaddress`, add `sigverify`/`sigcosts` precompiles for AA use cases) |
-| Jun 3 | [#1794](https://github.com/ethereum/ERCs/pull/1794) | chiranjeev13 | Add ERC-8286: Modular Accounts for Frame Transactions (ERCs repo). Defines how ERC-7579 modular accounts implement the EIP-8141 validation flow; first application-layer standard built on EIP-8141. Still open as of Jul 20 with CI/editor review outstanding |
+| Jun 3 | [#1794](https://github.com/ethereum/ERCs/pull/1794) | chiranjeev13 | Add ERC-8286: Modular Accounts for Frame Transactions (ERCs repo). Defines how ERC-7579 modular accounts implement the EIP-8141 validation flow; first application-layer standard built on EIP-8141. Still open with CI/editor review outstanding |
 | Jun 30 | [#11773](https://github.com/ethereum/EIPs/pull/11773) | forshtat | Move EIP-2542 to Withdrawn, superseded by EIP-8141 (merged Jun 30; first EIP formally withdrawn in favor of frame transactions) |
 | Jul 15 | [#1883](https://github.com/ethereum/ERCs/pull/1883) | chunter-cb | Add draft ERC-8340 Transaction Metadata Encoding, an application-layer CBOR layout for EIP-8130's opaque metadata field |
 
@@ -122,13 +130,18 @@
 | Jul 18 | [#11964](https://github.com/ethereum/EIPs/pull/11964) | soispoke | Add EIP-8272 `source_id` test vector | Closed because fixed 20-byte + 32-byte encoding was already unambiguous |
 | Jul 19 | [#11972](https://github.com/ethereum/EIPs/pull/11972) | soispoke | Clarify NONCE_MANAGER activation | Draft self-closed without comment |
 | Jul 19 | [#11973](https://github.com/ethereum/EIPs/pull/11973) | soispoke | Clarify EIP-8272 sighash and predeploy address | Draft self-closed without comment |
+| Jul 20 | [#11935](https://github.com/ethereum/EIPs/pull/11935) | svlachakis | Bound the signatures list | Replaced by per-entry gas pricing in merged #11976 |
+| Jul 21 | [#11956](https://github.com/ethereum/EIPs/pull/11956) | AnkushinDaniil | Batch sponsor repayment with user execution | Superseded when #11955 excluded VERIFY from atomic batches |
+| Jul 24 | [#12004](https://github.com/ethereum/EIPs/pull/12004) | AnkushinDaniil | Add a canonical P256 pseudo-account | P256 is a crypto operation, not a complete account interface |
+| Jul 24 | [#12010](https://github.com/ethereum/EIPs/pull/12010) | AnkushinDaniil | Stabilize canonical-paymaster identity | EIP-7702 recognition was flawed; pinned code hash continues in #12012 |
+| Jul 27 | [#11971](https://github.com/ethereum/EIPs/pull/11971) | soispoke | Clarify decoding, signing, and activation | P256 portion landed in #11984; remaining combined patch was not justified |
 
 ## Key Contributors
 
 | Person | Handle | Role |
 |---|---|---|
 | Vitalik Buterin | @vbuterin | Co-author of EIP-8141; co-author of EIP-8250 Keyed Nonces (PR #11598, merged May 11) and EIP-8272 Recent Roots (PR #11726, merged Jun 5); primary author with Thomas Coratger of EIP-8288 Frame type for PQ sig and STARK aggregation (PR #11772, opened Jun 5) |
-| lightclient (Matt) | @lightclient | Co-author, primary spec maintainer, added per-frame `value` (PR #11534, merged Apr 16), repaired custom-verifier signature bytes with PR #11837, and restored codeless EOA sponsorship with PR #11954 |
+| lightclient (Matt) | @lightclient | Co-author and primary spec maintainer; added per-frame `value` (#11534), repaired custom-verifier signature bytes (#11837), restored codeless EOA sponsorship (#11954), priced arbitrary signatures (#11976), and statically excluded VERIFY from batches (#11987) |
 | Felix Lange | @fjl | Co-author, original PR submitter, opcode design |
 | Yoav Weiss | @yoavw | Co-author |
 | Alex Forshtat | @forshtat | Co-author, ERC-7562/4337 expertise |
@@ -151,15 +164,15 @@
 | dionysuzx | @dionysuzx | Hegotá meta-EIP maintainer, submitted PR #11537 moving EIP-8141 to CFI (merged Apr 30) |
 | Nero_eth | Nero_eth | ethresear.ch analyst; "Three Gates to Privacy" post framing mempool/FOCIL/VOPS constraints on privacy-pool flows through frame transactions |
 | Toni Wahrstätter | @nerolation | Author of PR #11584 (2D nonces, closed), co-author of EIP-8250 Keyed Nonces (PR #11598, merged May 11), author of PR #11662 (EXPIRY_VERIFIER frame, merged May 14), co-author with lightclient of EIP-8266 Expiring Nonces (PR #11692, merged May 22), and co-author with soispoke and vbuterin of EIP-8272 Recent Roots (PR #11726, merged Jun 5). Added to EIP-8141's `author` header in PR #11662 |
-| Thomas Thiery | @soispoke | Lead author of EIP-8250 Keyed Nonces (PR #11598, merged May 11, extended Jun 1 by PR #11749 adding bounded key-set support) and EIP-8272 Recent Roots (PR #11726, merged Jun 5). Caught the same-block replay bug in PR #11692 (EIP-8266) during May 19 inline review, prompting nerolation's fixes |
+| Thomas Thiery | @soispoke | Lead author of EIP-8250 Keyed Nonces (#11598, extended by #11749) and EIP-8272 Recent Roots (#11726); caught EIP-8266's same-block replay bug and completed EIP-8141 fee settlement in #11969 |
 | Pedro Gomes | @pedrouid | Author of PR #11681 (opened May 16), the successor to closed PR #11643 (Extended Feature Set, May 11 – May 18): proposes bundling guarantors, keyed nonces, and signer binding into EIP-8141 itself via a `signer` envelope field and an `AUTH_MANAGER` system contract, dropping the envelope-expiry component now that PR #11662 (EXPIRY_VERIFIER) ships protocol-level expiry as a verifier-frame contract |
 | German Abal | @ariutokintumi | Co-founder/architect of EVVM (contract-native AA framework); contributed a production-perspective comparison on the magicians thread (post #148, May 7) on per-environment policy, async execution, batch granularity, and reservation primitives |
 | Sam Wilson | @SamWilsn | EIP editor; spec-coherence review (post #149, May 8) on naming, empty-target representation, opcode-budget, and `FRAMEDATACOPY` revert semantics |
 | trebor | @trebor | Privacy-focused paymaster researcher (Kohaku); raised the Example 3 (ERC-20 paymaster) feasibility question in posts #156-157 (May 21). After matt's clarification in post #158 (Jun 3), trebor committed in post #159 (Jun 4) to a PR clarifying Example 3 in the EIP (Frame 1 should be a signature check by the canonical paymaster, not an on-chain ERC-20 balance read) |
 | Thomas Coratger | (not on GitHub directly in PR author list) | Co-author with vbuterin of EIP-8288 (PR #11772, opened Jun 5): Frame type for PQ sig and STARK aggregation. Lean Ethereum tooling contributor |
 | Milos Stankovic | @morph-dev | Author of PR #11814 (spec cleanup and clarifications, merged Jul 7): default-code index-0 signature rule later refined by #11954, public-mempool expiry-first rule, signer defaulting to `tx.sender`, validation-prefix flag matching, and ERC-20 sponsor clarification |
-| Stavros Vlachakis | @svlachakis | Implementation-focused EIP-8141 reviewer; authored PRs #11935 and #11937-#11942 covering signature bounds/encoding, operand order, approval scope, gas floors, refunds, and receipt networking |
-| Daniil Ankushin | @AnkushinDaniil | Implementation-focused contributor; authored the July EIP-8250/EIP-8272 correction wave (#11930-#11931, #11958-#11963) and approval/sponsor follow-ups #11955-#11956 |
+| Stavros Vlachakis | @svlachakis | Implementation-focused EIP-8141 reviewer; authored July signature, refund, receipt, blob, fee-bound, direct-evaluation, replacement, log, and canonical-paymaster work (#11937-#11942, #11984-#11985, #12001, #12005, #12007-#12008, #12012) |
+| Daniil Ankushin | @AnkushinDaniil | Implementation-focused contributor; authored the July sibling corrections (#11930-#11931, #11958-#11963), VERIFY batch-safety fix #11955, APPROVE pricing #12003, and signature-registry proposal #12011 |
 | Mislav Javor | @oxshaman | Lead author of ERC-8211 Smart Batching (ERC PR #1638); the proposal names EIP-8141 SENDER frames as a forward-compatibility execution transport, without taking it as a dependency |
 | Giulio Rebuffo | @Giulio2002 | Author of EIP-8202 Scheme-Agile Transactions (PR #11438, merged Apr 22) and its Falcon-512 support; raised the "smart wallet tax" critique of EIP-8141 in the Frame-vs-SchemedTransactions thread |
 | Dragan Rakita | @rakita | Author of EIP-8175 Composable Transaction (PR #11355, merged Mar 10), the flat-composition alternative to frame-based AA |
@@ -174,6 +187,8 @@
 
 - [Live Demo](https://demo.eip-8141.ethrex.xyz/)
 - [EIP-8141 Latest Spec](https://eips.ethereum.org/EIPS/eip-8141)
+- [EIP-3529: Reduction in refunds](https://eips.ethereum.org/EIPS/eip-3529)
+- [EIP-7594: PeerDAS - Peer Data Availability Sampling](https://eips.ethereum.org/EIPS/eip-7594)
 - [Ethereum Magicians Discussion](https://ethereum-magicians.org/t/frame-transaction/27617)
 - [PoC Implementation by sm-stack](https://github.com/sm-stack/eip8141-poc)
 - [PoC Writeup](https://hackmd.io/@TB5b8ghoQyChOtUKB0RsOg/B1PhyMK_be)

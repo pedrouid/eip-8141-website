@@ -772,3 +772,81 @@ Post #165 asks about shared-paymaster contention and `ORIGIN` compatibility with
 PR #11967 moves `RECENTROOTREFLOAD` from `0xb4`, now occupied by `SIGPARAM`, to `0xb5`. Nerolation approves the final structural collision fix without proposing an alternative.
 
 **What to watch into Phase 24**: approval/refund follow-ups (#11940, #11942, #11955-#11956, #11969, #11971), additive sibling rewrites, EIP-8288 proof security, and Hegotá status.
+
+## Phase 24: Implementation Hardening and Fee Settlement (Jul 20 – Jul 28)
+
+*Client implementation turns the audit queue into consensus rules. Review favors structural constraints and explicit formulas over special-case state preservation; no forum or ethresear.ch discussion changes the direction.*
+
+### Arbitrary Signature Entries Get Priced (Merged)
+
+*lightclient — PR #11976, submitted and merged Jul 20*
+
+The proposed fixed signature-count cap gave way to 100 gas per `ARBITRARY` entry. lightclient preferred transaction gas as the bound, avoiding a second limit while closing the zero-cost decode path.
+
+### Receipt Message Encoding Lands (Merged)
+
+*svlachakis — PR #11942, submitted Jul 16, merged Jul 20*
+
+Review keeps the wire shape in EIP-8141 until devp2p owns it, giving implementations one deterministic representation.
+
+### VERIFY Frames Leave Atomic Batches (Merged)
+
+*AnkushinDaniil, lightclient — PR #11955, submitted Jul 17, merged Jul 21*
+
+Nethermind's snapshot implementation showed that payer state and escrow could diverge during batch rollback. Review abandoned special approval-survival semantics and excluded `VERIFY` from batches; mempool simulation now waits for the approving frame to succeed.
+
+### Refund Accounting Becomes Transaction-Scoped (Merged)
+
+*svlachakis — PR #11940, submitted Jul 16, merged Jul 21*
+
+Review chose one EIP-3529 counter across frames. soispoke and AnkushinDaniil pushed for exact rollback, cap, and receipt wording, preserving gross frame observability even though frame totals need not match final transaction gas.
+
+### P256 Becomes Canonical (Merged)
+
+*svlachakis — PR #11984, submitted and merged Jul 21*
+
+Because the P256 precompile accepts both signature forms, protocol validation now requires low-`s` and wallets must normalize. The choice removes outer-signature malleability without narrowing the underlying crypto primitive.
+
+### Atomic-Batch Shape Becomes Static (Merged)
+
+*lightclient — PR #11987, submitted and merged Jul 21*
+
+The execution-time conclusion from #11955 becomes a validity rule: only DEFAULT and SENDER may carry the flag, and VERIFY cannot enter or terminate a batch. Review favored early rejection over another runtime corner case.
+
+### Blob Support Replaces a Blobless Exception (Merged)
+
+*svlachakis — PR #11985, submitted Jul 21, merged Jul 23*
+
+The draft first forbade blobs, but review required frame transactions to support them fully. The result adopts EIP-7594 networking and includes blob gas in payer settlement, keeping the new transaction type aligned with Ethereum's data path.
+
+### Protocol-Defined Prefixes Gain a Fast Path (Merged)
+
+*svlachakis — PR #12001, submitted and merged Jul 23*
+
+Clients may evaluate fully protocol-defined prefixes directly, but review preserves identical gas and dependency results. The optimization removes redundant EVM execution without weakening revalidation.
+
+### APPROVE Pricing Is Simplified (Merged)
+
+*AnkushinDaniil — PR #12003, submitted and merged Jul 23*
+
+Review treats nonce, payer, and escrow bookkeeping as work already priced intrinsically. `APPROVE` therefore pays only memory expansion, avoiding a second charge for protocol effects.
+
+### Fee Fields Gain Explicit Bounds (Merged)
+
+*svlachakis — PR #12005, submitted and merged Jul 23*
+
+All fee fields now use the typed-transaction `< 2**256` bound. The change removes cross-client arithmetic ambiguity before the settlement rewrite lands.
+
+### Replacement, Logs, Registry, and Paymaster Work Opens
+
+*svlachakis, AnkushinDaniil — PRs #12007-#12008, #12011-#12012, Jul 23 – Jul 24*
+
+New drafts move attention to payer exposure and replacement, transaction-log aggregation, a governed signature-scheme registry, and a complete canonical-paymaster implementation.
+
+### Complete Fee Settlement Lands (Merged)
+
+*soispoke, lightclient — PR #11969, submitted Jul 18, merged Jul 28*
+
+The final review resolves how the calldata floor, EIP-3529 refunds, blob fees, payer escrow, and receipts compose. Corrections during review fixed refund ordering and overflow checks; lightclient's final rewrite makes payer refunds explicit while retaining gross frame receipts.
+
+**What to watch into Phase 25**: whether #12007, #12008, #12011, or #12012 gathers author consensus; whether additive sibling PRs #11968 and #11970 merge; and whether the base spec's new settlement rules expose further client mismatches.

@@ -91,7 +91,7 @@ On key rotation: EIP-8130 has native onchain key rotation via `owner_config` cha
 
 | Proposal | Batching Model | Atomicity Control |
 |---|---|---|
-| **EIP-8141** | Multiple frames per tx. SENDER frames execute sequentially with per-frame gas. | Flags field bit 2 on consecutive frames of any mode; validation-prefix batches are excluded from the restrictive mempool |
+| **EIP-8141** | Multiple frames per tx. SENDER frames execute sequentially with per-frame gas. | Flags field bit 2 on consecutive DEFAULT/SENDER frames; VERIFY cannot participate in or terminate a batch (#11955/#11987) |
 | **EIP-8175** | Typed capabilities list (CALL, CREATE). Sequential execution. | All-or-nothing: if any capability reverts, remaining are skipped |
 | **EIP-8130** | Call phases (array of arrays). Completed phases persist if later phases revert. | Per-phase atomicity: calls within a phase are atomic |
 | **EIP-8202** | Single execution payload. No native batching. | N/A: one call per tx (multicall wrappers needed) |
@@ -117,7 +117,7 @@ On EVM changes: EIP-8141 requires 6 new opcodes and a new frame execution model.
 
 | Proposal | Validation Cost | Mempool Complexity |
 |---|---|---|
-| **EIP-8141** | EVM execution (capped at 100k gas) | High: validation prefix shapes, banned opcodes, canonical paymaster |
+| **EIP-8141** | EVM execution (capped at 100k gas); protocol-defined prefixes may be evaluated directly with equivalent results (#12001) | High for custom validation: validation prefix shapes, banned opcodes, canonical paymaster |
 | **EIP-8175** | Crypto sig verification + fee_auth EVM prelude | Medium: stateless sigs, but fee_auth simulation needed |
 | **EIP-8130** | STATICCALL to authenticator (or native impl) | Medium: canonical authenticator set, account lock optimization |
 | **EIP-8202** | ecrecover / P256VERIFY / Falcon-512 verify (deterministic) | Low: purely cryptographic, no EVM |
@@ -131,7 +131,7 @@ On tracing: EIP-8141 requires full EVM tracing during validation (banned opcodes
 
 | Proposal | EOA Support | Account Creation | Async Execution | Cross-Chain |
 |---|---|---|---|---|
-| **EIP-8141** | Protocol-native default code (ECDSA secp256k1; P256 outer signatures require account code) | DEFAULT deploy frame through any trace-compatible factory | Incompatible | Not addressed |
+| **EIP-8141** | Protocol-native default code (ECDSA secp256k1; canonical low-`s` P256 outer signatures require account code, #11984) | DEFAULT deploy frame through any trace-compatible factory | Incompatible | Full blob support through EIP-7594 (#11985) |
 | **EIP-8175** | secp256k1 native; Ed25519 creates new addresses | Not addressed | Partially (fee_auth needs EVM) | Not addressed |
 | **EIP-8130** | Implicit EOA authorization, auto-delegation | CREATE2 via `account_changes` | Compatible | Yes: `chain_id = 0` replays |
 | **EIP-8202** | secp256k1 EOAs keep address; P256/Falcon create new | Not addressed | Compatible | Not addressed |

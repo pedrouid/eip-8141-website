@@ -4,29 +4,33 @@
 
 ## Structural Comparison
 
-| Aspect | Original (Jan 29) | Latest (Jul 20) |
+| Aspect | Original (Jan 29) | Latest (Jul 28) |
 |---|---|---|
 | **Opcodes** | `APPROVE`, `TXPARAMLOAD`, `TXPARAMSIZE`, `TXPARAMCOPY` (4) | `APPROVE (0xaa)`, `TXPARAM (0xb0)`, `FRAMEDATALOAD (0xb1)`, `FRAMEDATACOPY (0xb2)`, `FRAMEPARAM (0xb3)`, `SIGPARAM (0xb4)` (6) |
 | **APPROVE mechanism** | Return codes 0-4 at top-level frame | Transaction-scoped with scope operand (0x1, 0x2, 0x3), callable at any depth, double-approval prevention |
 | **APPROVE scope** | 0x0 (execution), 0x1 (payment), 0x2 (both) | 0x1 (payment), 0x2 (execution), 0x3 (both) |
 | **APPROVE restriction** | Must be top-level frame | `ADDRESS == frame.target` only |
 | **Frame structure** | `[mode, target, gas_limit, data]` | `[mode, flags, target, gas_limit, value, data]` (mode/flags split, per-frame `value`) |
-| **Outer envelope signatures** | No outer signatures field; all signatures carried inside `frame.data` of VERIFY frames | `signatures` outer-envelope list carrying `(scheme, signer, msg, signature)` entries. `SECP256K1` and `P256` are protocol-validated; `ARBITRARY` carries custom witness bytes for account-code validation. Default code reads index `0` when approving execution and index `1` for payment-only approval. Forward-compat hook for PQ signature aggregation (PR #11481, repaired by #11837/#11814 and sponsorship-restored by #11954) |
+| **Outer envelope signatures** | No outer signatures field; all signatures carried inside `frame.data` of VERIFY frames | `signatures` outer-envelope list carrying `(scheme, signer, msg, signature)` entries. `SECP256K1` and canonical low-`s` `P256` are protocol-validated; `ARBITRARY` carries custom witness bytes for account-code validation and costs 100 gas per entry. Default code reads index `0` when approving execution and index `1` for payment-only approval. Forward-compat hook for PQ signature aggregation (PR #11481, repaired by #11837/#11814, sponsorship-restored by #11954, and hardened by #11976/#11984) |
 | **Mode field** | Just mode value (0, 1, 2) | Pure mode (0, 1, 2) with separate `flags` field |
-| **Flags field** | N/A | Bits 0-1 = approval scope constraint; bit 2 = atomic batch flag |
+| **Flags field** | N/A | Bits 0-1 = approval scope constraint; bit 2 = atomic batch flag, valid only for DEFAULT and SENDER |
 | **Frame modes** | DEFAULT, VERIFY, SENDER | Same three modes plus an expiry-verifier shape (`VERIFY` with `target == EXPIRY_VERIFIER`) admitted by PR #11662 (merged May 14) |
-| **Atomic batching** | Not supported | Bit 2 of flags; any frame mode may participate (PR #11652 merged May 12 lifted the previous SENDER-only restriction). Restrictive mempool tier separately forbids the flag inside the validation prefix |
+| **Atomic batching** | Not supported | Bit 2 of flags on DEFAULT/SENDER frames. VERIFY cannot participate in or terminate a batch; public-mempool simulation continues through the successful payer-approving frame (PRs #11955 and #11987) |
 | **MAX_FRAMES** | `10^3` (1,000) | `64` |
 | **Per-frame cost** | None | `FRAME_TX_PER_FRAME_COST = 475` gas |
+| **Fee-field bounds** | Not explicit | Every execution and blob fee field must be less than `2**256` (PR #12005) |
+| **Gas settlement** | One gas limit with no cross-frame refund model | `standard_gas_limit`, EIP-7623 `calldata_floor_gas`, and `max_gas`; a transaction-level EIP-3529 refund counter; final `gas_used` floors post-refund usage; `max_cost` escrow and `payer_refund` settle execution and blob fees (PRs #11940 and #11969) |
+| **APPROVE gas** | N/A | No base gas cost; only memory expansion, matching `RETURN` (PR #12003) |
+| **Blob support** | Blob hashes present only through inherited EIP-4844 context | Full KZG versioned-hash validation, `BLOBHASH`, EIP-7594 pooled-transaction wrapper, and payer blob-fee settlement (PR #11985) |
 | **EOA support** | None | Default code: ECDSA secp256k1 verification in VERIFY only, with canonical `v`/`r`/low-`s` encoding. Execution approval uses `tx.signatures[0]`; payment-only EOA sponsorship uses index `1`. P256 is protocol-validated in the outer list but not accepted by codeless EOA default code. `SENDER` and `DEFAULT` no longer revert (PR #11621): top-level value transfer to a default-code account completes. The earlier RLP-call-batch payload was removed by PR #11577 (Apr 29) once native batching plus per-frame `value` covered the multi-call use case |
 | **Signature hash** | VERIFY data NOT elided (bug) | Raw `sig.signature` bytes are elided for signatures with empty `msg`; frame data stays covered. EIP-2718 type-byte prefix included (PR #11544, merged Apr 22). The Jul 6-7 repair (#11837/#11814) fixes the circular dependency introduced by the signatures-list merge |
 | **Receipt status** | Not specified | `0x0` failure, `0x1` success, `0x2` skipped-batch (corrected by PR #11953, merged Jul 17) |
 | **Expiry mechanism** | None | `EXPIRY_VERIFIER = address(0x8141)` canonical contract; an expiry-verifier `VERIFY` frame carries an 8-byte unix-seconds deadline as `frame.data`. Public-mempool admission MUST drop transactions whose expiry has passed; `TIMESTAMP` opcode gets a carve-out for this canonical runtime only. Public propagation requires the expiry frame to be first |
-| **Mempool policy** | Not defined (just "Security Considerations" section) | Comprehensive: validation prefixes, canonical paymaster, banned opcodes, MAX_VERIFY_GAS including intrinsic signature-validation cost, expiry-verifier admission, approval-scope flag matching, and no VERIFY frames after the validation prefix |
-| **Requires header** | `2718, 4844` | `1559, 2718, 3607, 4844, 7623, 7702` (PR #11567 dropped 7997 on Apr 30; PR #11272 added 3607 on May 5 with an explicit carve-out for frame transactions; PR #11621 added 7623 and 7702 on May 11) |
+| **Mempool policy** | Not defined (just "Security Considerations" section) | Comprehensive: validation prefixes, canonical paymaster, banned opcodes, MAX_VERIFY_GAS including intrinsic signature-validation cost, expiry-verifier admission, approval-scope flag matching, no VERIFY frames after the validation prefix, and direct evaluation for fully protocol-defined prefixes |
+| **Requires header** | `2718, 4844` | `1559, 2718, 3529, 3607, 4844, 7594, 7623, 7702` (refund accounting added #11940; blob networking added #11985) |
 | **EIP-3607 origination check** | Inherited unconditionally (would block contract-account senders) | Carved out for frame transactions: `SENDER` frames may originate from contract accounts; non-frame txs unchanged (PR #11272, merged May 5) |
 | **Authors** | 7 co-authors | 9 co-authors (derekchiang and nerolation added) |
-| **Receipt** | Not specified in detail | Includes `payer` field and per-frame `[status, gas_used, logs]`; `status == 0x2` for skipped batch entries |
+| **Receipt** | Not specified in detail | Includes `payer` and per-frame `[status, gas_used, logs]`; frame gas is gross before transaction-level refunds and may not sum to final transaction gas. The fork `Receipts` message carries the same nested data (PRs #11940 and #11942) |
 | **SENDER frame requirements** | Could execute without prior approval | Requires `sender_approved == true` |
 | **Value in frames** | Not in frame structure | Per-frame `value` field; non-zero only in SENDER frames. DEFAULT/VERIFY observe `CALLVALUE = 0` |
 | **VERIFY frame behavior** | State changes allowed | Behaves as `STATICCALL`, no state changes. `APPROVE` requirement narrowed to `self_verify`/`only_verify`/`pay` shapes (PR #11662 relaxed the previous "every VERIFY frame must call APPROVE" rule to "if the frame reverts, the tx is invalid") |
@@ -89,18 +93,18 @@ The original spec deliberately had no `value` field in frames, on the principle 
 
 ## Active Proposals That May Change the Comparison
 
-As of July 20, 2026, several open PRs propose changes that would extend this comparison table:
+As of July 28, 2026, several open PRs propose changes that would extend this comparison table:
 
 | Proposal | PR | Impact |
 |---|---|---|
-| **Precompile-based VERIFY** | [#11482](https://github.com/ethereum/EIPs/pull/11482) | Would allow VERIFY frames to target signature precompiles directly, changing the verification model (all reviewers approved) |
-| **Guarantors** | [#11555](https://github.com/ethereum/EIPs/pull/11555) | Would introduce a "guarantor" payer that pays even if sender validation fails, letting mempool nodes skip sender simulation and admit shared-state-reading VERIFY frames |
+| **Precompile-based VERIFY** | [#11482](https://github.com/ethereum/EIPs/pull/11482) | Draft, merge-conflicted proposal to let VERIFY frames target signature precompiles directly |
+| **Guarantors** | [#11555](https://github.com/ethereum/EIPs/pull/11555) | Draft, merge-conflicted proposal for a payer that pays even if sender validation fails, letting nodes skip sender simulation |
 | **Payer approves before sender** | [#11580](https://github.com/ethereum/EIPs/pull/11580) | Alternative to #11555: relaxes the ordering rule so a payer can approve before the sender, letting a payer commit to gas without simulating sender validation. Briefly auto-merged as #11575 on Apr 28 and reverted by #11579 on Apr 29; reopened as a draft |
 | **Extend with Guarantors, Flexible Nonces, and Signer Binding** | [#11681](https://github.com/ethereum/EIPs/pull/11681) | Pedro Gomes's +810/-74 bundle folding guarantors (#11555), keyed nonces (EIP-8250-equivalent), and signer binding (EIP-8164-equivalent) into EIP-8141 via one `signer` envelope field and an `AUTH_MANAGER` system contract. Successor to the closed PR #11643 after PR #11662 (EXPIRY_VERIFIER) settled the expiry design as a verifier-frame contract; inverts the requires-chain layering that EIP-8250 established by absorbing the keyed-nonce and signer-binding features into EIP-8141 itself |
 | **EIP-8288 PQ/STARK aggregation** | [#11772](https://github.com/ethereum/EIPs/pull/11772) | Still open after editorial requested changes and proof-security review. Would add `DEP_VERIFY_FRAME_MODE = 3`, block-level `recursive_stark`, and Lean Ethereum dependency schemes |
-| **Bound signatures list** | [#11935](https://github.com/ethereum/EIPs/pull/11935) | Would add `MAX_SIGNATURES = 64`; review is debating whether gas/transaction-size limits already provide a sufficient bound, especially for zero-cost empty `ARBITRARY` entries |
-| **Gas, receipt, and approval clarifications** | [#11940](https://github.com/ethereum/EIPs/pull/11940), [#11942](https://github.com/ethereum/EIPs/pull/11942), [#11955](https://github.com/ethereum/EIPs/pull/11955), [#11969](https://github.com/ethereum/EIPs/pull/11969) | Would pin EIP-3529 refund accounting, receipt-network encoding, approval rollback boundaries, and settlement against `charged_gas` |
-| **Sponsor repayment batching** | [#11956](https://github.com/ethereum/EIPs/pull/11956) | Would make the ERC-20 repayment and all SENDER operations one atomic batch so a sponsee cannot keep execution after repayment reverts |
-| **Additive sibling deltas** | [#11968](https://github.com/ethereum/EIPs/pull/11968), [#11970](https://github.com/ethereum/EIPs/pull/11970) | Would rewrite EIP-8250 and EIP-8272 as additive changes to the base frame payload/gas formulas, reducing cross-EIP replacement ambiguity |
-| **Decoding, signing, and activation** | [#11971](https://github.com/ethereum/EIPs/pull/11971) | Would pin RLP shapes, make sighash construction non-mutating, adopt EIP-7951 P256 validation rules, and define EXPIRY_VERIFIER activation |
+| **Additive sibling deltas** | [#11968](https://github.com/ethereum/EIPs/pull/11968), [#11970](https://github.com/ethereum/EIPs/pull/11970) | Would rewrite EIP-8250 and EIP-8272 as additive changes. #11968 is draft and predates the merged settlement formula; #11970 is ready for review |
+| **Replacement and payer exposure** | [#12007](https://github.com/ethereum/EIPs/pull/12007) | Would define `(sender, nonce)` replacement, fee bumps, per-payer exposure reservations, revalidation, and eviction |
+| **Transaction log aggregation** | [#12008](https://github.com/ethereum/EIPs/pull/12008) | Would define transaction logs as successful frame logs in execution order, excluding reverted and unrolled logs |
+| **Protocol signature registry** | [#12011](https://github.com/ethereum/EIPs/pull/12011) | Would formalize fixed-cost protocol signature IDs, verifiers, signer derivation, upgrades, and aggregation compatibility |
+| **Canonical paymaster implementation** | [#12012](https://github.com/ethereum/EIPs/pull/12012) | Would pin the paymaster storage model, signer index, delayed rotation and withdrawals, and per-fork code hash |
 | **Frame returndata opcodes** | Under discussion (post #137) | Proposed `FRAMERETURNDATASIZE`/`FRAMERETURNDATACOPY` to enable multi-step flows, no PR yet |

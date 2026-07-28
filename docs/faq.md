@@ -84,7 +84,7 @@ Yes, through non-canonical paymasters. The public-mempool shape lets a sponsor i
 
 **4.4. Can I batch multiple actions in one transaction?**
 
-Yes. Multiple SENDER frames execute sequentially, and consecutive frames with the atomic flag revert together if any fails. [See atomic batching →](/current-spec#atomic-batching)
+Yes. Consecutive DEFAULT or SENDER frames with the atomic flag revert together if any fails; VERIFY frames cannot participate in or terminate a batch. [See atomic batching →](/current-spec#atomic-batching)
 
 **4.5. Do I need a smart contract wallet to use this?**
 
@@ -92,7 +92,7 @@ No. The protocol has built-in default behavior for codeless accounts: secp256k1 
 
 **4.6. Is this compatible with passkeys / biometrics?**
 
-Partly. The outer signatures list now includes `P256 (0x2)` as a protocol-validated scheme, but PR #11621 removed P256 from codeless EOA default code. Passkey and WebAuthn authorization therefore requires deployed account code that uses the validated signature metadata, or a future extension EIP; secp256k1 remains the only default-code authentication path.
+Partly. The outer signatures list includes canonical low-`s` `P256 (0x2)`, but codeless EOA default code does not accept it. Passkey/WebAuthn authorization therefore needs deployed account code or a future extension EIP.
 
 **4.7. How do I send ETH to someone with a frame transaction?**
 
@@ -101,6 +101,10 @@ Build a SENDER frame with `target = destination` and `value = amount`; no payloa
 **4.8. Can one codeless EOA sponsor another codeless EOA?**
 
 Yes. Default code uses signature index `0` for the sender's execution approval and index `1` for a distinct payment-only EOA sponsor (PR #11954). The sponsor is non-canonical, so the public mempool allows only one pending transaction per sponsor.
+
+**4.9. Can frame transactions carry blobs?**
+
+Yes. They validate KZG versioned hashes, use the EIP-7594 pooled-transaction wrapper, expose `BLOBHASH`, and settle blob gas against the payer. [See blob support →](/current-spec#blob-support)
 
 ---
 
@@ -136,11 +140,15 @@ Yes, via account code. Default code covers only secp256k1 at signature index 0 o
 
 **5.8. How do custom verifiers get signature bytes without circular hashes?**
 
-They put witness bytes in an `ARBITRARY` signature entry, not in frame data. `ARBITRARY` entries are structurally checked by the protocol, raw bytes are available through `SIGPARAM`, and signatures with empty `msg` have raw signature bytes elided from `compute_sig_hash(tx)`. That lets account code validate custom schemes over the canonical transaction hash without the signature committing to itself.
+They put witness bytes in a 100-gas `ARBITRARY` signature entry. `SIGPARAM` exposes the bytes, and empty-`msg` entries elide them from the canonical hash so the witness does not commit to itself.
 
 **5.9. Is there a standard for existing modular smart accounts to use frame transactions?**
 
 Yes. ERC-8286 (draft, `requires: 7579, 8141`) standardizes how ERC-7579 modular accounts implement the frame validation flow: a validator module returns an approval mode the account applies via `APPROVE` in a VERIFY frame. See [Developer Tooling](/developer-tooling#where-fragmentation-risk-still-lives).
+
+**5.10. Must wallets normalize P256 signatures?**
+
+Yes. EIP-8141 requires canonical low-`s` P256 even though `P256VERIFY` accepts high-`s`; wallets must replace high `s` with `SECP256R1N - s`.
 
 ---
 
@@ -160,7 +168,7 @@ EIP-8141 offers the most flexible PQ path (arbitrary account code plus `ARBITRAR
 
 **7.1. How do nodes validate frame transactions?**
 
-Nodes simulate the validation prefix. Approval-bearing validation frames must call `APPROVE`; expiry-verifier frames are the special no-approval case. The [mempool policy](/current-spec#mempool-policy) restricts public propagation to recognized prefixes with bounded gas and banned opcodes.
+Nodes simulate the validation prefix. If every prefix frame uses protocol-defined default, expiry-verifier, or canonical-paymaster code, they may evaluate it directly with identical dependencies, gas, and `MAX_VERIFY_GAS` results. [Mempool policy →](/current-spec#mempool-policy)
 
 **7.2. What is the canonical paymaster?**
 
@@ -255,15 +263,19 @@ It remains Considered for Inclusion (CFI), not Proposed for Inclusion (PFI). ACD
 
 **10.4. How are frame and signature bytes charged?**
 
-They pay normal per-token calldata cost plus the EIP-7623 calldata floor (PR #11941). The open PR #11969 proposes reconciling final payer and block-gas settlement explicitly against `charged_gas`.
+They contribute to `standard_gas_limit` and the EIP-7623 `calldata_floor_gas`; `max_gas` reserves the larger amount. Final `gas_used` applies the EIP-3529 refund, then enforces the floor.
 
 **10.5. What do frame receipt status values mean?**
 
-`0x0` means failure, `0x1` means success, and `0x2` means skipped after an atomic-batch failure. PR #11953 corrected the skipped value from `0x3`.
+`0x0` means failure, `0x1` success, and `0x2` skipped after an atomic-batch failure. Per-frame gas is gross before the transaction refund and may not sum to final transaction `gas_used`.
 
 **10.6. Did the sibling EIPs collide with EIP-8141's introspection assignments?**
 
 Yes, and the July fixes resolved them: EIP-8250 starts nonce-key selectors at `0x10` (#11966), while EIP-8272 uses count selector `0x0f` (#11930) and `RECENTROOTREFLOAD (0xb5)` (#11967).
+
+**10.7. How much gas does APPROVE cost?**
+
+`APPROVE` has no base charge and pays only memory expansion, matching `RETURN`; related nonce, payer, and escrow work is covered by intrinsic transaction costs.
 
 ---
 

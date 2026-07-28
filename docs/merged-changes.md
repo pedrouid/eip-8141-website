@@ -632,30 +632,149 @@ An implementation-driven audit propagated the repaired signatures-list and gas m
 
 **Significance**: Changing an opcode assignment is structural. It closes the final known `0xb*` collision across the merged frame-transaction sibling stack.
 
+## Arbitrary-Signature Pricing — July 20, 2026
+
+*lightclient — PR #11976, merged July 20, 2026*
+
+- **Signature limits** (+3/-3): each `ARBITRARY` signature entry now adds 100 gas to intrinsic signature validation.
+- **DoS resistance**: pricing bounds empty custom entries through the transaction gas limit without introducing a separate count constant.
+
+**Key review discussion**: lightclient replaced PR #11935's proposed `MAX_SIGNATURES = 64` with per-entry pricing; reviewers accepted transaction gas as the bound and the explicit-cap draft closed.
+
+**Significance**: This changes a protocol gas constant and closes the zero-cost signature-list decoding gap.
+
+## Receipt Message Encoding — July 20, 2026
+
+*svlachakis — PR #11942, merged July 20, 2026*
+
+- Defines the frame receipt payload in the fork's `Receipts` message as `[tx-type, cumulative-gas, payer, [[status, gas-used, logs], ...]]`.
+- Keeps the networking encoding in EIP-8141 until a matching devp2p protocol version owns it.
+
+## VERIFY Batch Exclusion — July 21, 2026
+
+*AnkushinDaniil — PR #11955, merged July 21, 2026*
+
+- **Approval finality**: public-mempool simulation stops only after the frame that sets `payer` has completed successfully.
+- **Atomic batching**: `VERIFY` frames cannot participate in atomic batches, eliminating the rollback path that could leave approval state inconsistent with escrow state.
+
+**Key review discussion**: Nethermind implementation exposed a snapshot rollback bug. Review moved away from preserving approvals through batch rollback; lightclient requested the simpler structural exclusion that became the final patch.
+
+**Significance**: This changes both consensus-valid batch shapes and the point at which mempool validation may stop.
+
+## Transaction-Level Gas Refunds — July 21, 2026
+
+*svlachakis — PR #11940, merged July 21, 2026*
+
+- **Refund accounting**: one transaction-level refund counter uses EIP-3529's one-fifth cap.
+- **Rollback**: reverted frames and unrolled batches restore their refund-counter changes.
+- **Receipts**: per-frame `gas_used` remains gross, before transaction-level refunds.
+
+**Key review discussion**: lightclient selected a transaction-level counter rather than per-frame refund settlement. soispoke required explicit cap, journal, and receipt wording; AnkushinDaniil clarified that the cap uses full pre-refund transaction gas.
+
+**Significance**: This defines cross-frame refund state and deliberately separates receipt observability from final transaction gas.
+
+## Canonical P256 Signatures — July 21, 2026
+
+*svlachakis — PR #11984, merged July 21, 2026*
+
+- **Signature validation**: protocol P256 entries require canonical low-`s` signatures.
+- **Constants**: adds `SECP256R1N` so clients use the same curve-order bound.
+- **Wallet behavior**: signers normalize high-`s` output to `n - s`.
+
+**Key review discussion**: reviewers noted that `P256VERIFY` accepts both high- and low-`s` forms. The EIP therefore performs its own canonicality check instead of inheriting the precompile's broader acceptance.
+
+**Significance**: This adds a consensus constant and removes a malleable outer-signature representation.
+
+## Static Atomic-Batch Validation — July 21, 2026
+
+*lightclient — PR #11987, merged July 21, 2026*
+
+- **Frame flags**: the atomic flag is valid only on `DEFAULT` and `SENDER` frames.
+- **Batch boundaries**: a flagged frame must be followed by another non-`VERIFY` frame, so `VERIFY` cannot enter or terminate a batch.
+
+**Key review discussion**: the patch turns PR #11955's execution-time safety conclusion into a statically checkable transaction-validity rule; reviewers approved without proposing a competing shape.
+
+**Significance**: This narrows the consensus-valid flag/mode matrix and makes batch safety decidable before execution.
+
+## Blob Transaction Support — July 23, 2026
+
+*svlachakis — PR #11985, merged July 23, 2026*
+
+- **Envelope**: validates KZG versioned hashes and exposes them through `BLOBHASH`.
+- **Networking**: adopts the EIP-7594 pooled-transaction sidecar and wrapper.
+- **Fees**: the payer escrows and pays blob gas alongside execution gas.
+- **Dependencies**: adds EIP-7594 and `VERSIONED_HASH_VERSION_KZG`.
+
+**Key review discussion**: the draft initially forbade blobs. lightclient requested full support and rewrote the change around EIP-7594 rather than leaving frame transactions as a blobless exception.
+
+**Significance**: This adds a new consensus constant and extends the envelope, networking, execution, and payer-fee surfaces.
+
+## Direct Validation-Prefix Evaluation — July 23, 2026
+
+*svlachakis — PR #12001, merged July 23, 2026*
+
+- Allows nodes to evaluate protocol-defined validation prefixes directly when every prefix frame is default code, the expiry verifier, or the canonical paymaster.
+- Direct evaluation must produce the same dependencies, gas accounting, and `MAX_VERIFY_GAS` result as EVM simulation.
+
+## Zero-Base-Cost APPROVE — July 23, 2026
+
+*AnkushinDaniil — PR #12003, merged July 23, 2026*
+
+- **Opcode pricing**: `APPROVE` has no base gas charge and pays only memory expansion, matching `RETURN`.
+- **Intrinsic accounting**: nonce, payer, and maximum-cost collection work remains covered by transaction intrinsic costs.
+
+**Key review discussion**: reviewers accepted that the opcode's bookkeeping should not be charged twice because the transaction already prices the related protocol work intrinsically.
+
+**Significance**: This changes the gas semantics of a core EIP-8141 opcode.
+
+## Fee-Field Bounds — July 23, 2026
+
+*svlachakis — PR #12005, merged July 23, 2026*
+
+- **Validity**: each execution and blob fee field must be less than `2**256`.
+- **Arithmetic**: the explicit bounds make fee multiplication and escrow checks well-defined across clients.
+
+**Key review discussion**: the patch follows existing typed-transaction bounds and merged without disagreement.
+
+**Significance**: This adds consensus-validity bounds to every fee field.
+
+## Complete Fee Settlement — July 28, 2026
+
+*soispoke — PR #11969, merged July 28, 2026*
+
+- **Gas limits**: separates `standard_gas_limit`, `calldata_floor_gas`, and their maximum `max_gas`.
+- **Refunds**: applies the EIP-3529 refund first, then enforces the EIP-7623 calldata floor to derive `gas_used`.
+- **Payer settlement**: collects `max_cost`, charges execution gas at the effective price plus blob gas at the blob base fee, and returns `payer_refund`.
+- **Receipts**: preserves gross per-frame gas even when frame totals do not sum to final transaction gas.
+
+**Key review discussion**: review corrected the calldata-floor/refund order, blobless cases, receipt non-additivity, and the maximum-cost overflow check. lightclient rewrote the final formulas before merge.
+
+**Significance**: This closes the full transaction settlement path across gas limits, refunds, receipts, payer escrow, and blob fees.
+
 ## Active/Open PRs
 
-*As of July 20, 2026.* These PRs represent active design proposals that may change the spec in the near future.
+*As of July 28, 2026.* These PRs represent active design proposals that may change the spec in the near future.
 
-### PR #11482: Allow using precompiles for VERIFY frames (open since Apr 2)
+### PR #11482: Allow using precompiles for VERIFY frames (draft since Apr 2)
 
 **Author**: derekchiang
 
 - **Why**: Allow both EOAs and contract accounts to use precompiles for verification, enabling key rotation and shared verification logic.
 - **Proposed change**: Designate "signature precompiles" that VERIFY frames can target natively. The precompile reads the public key commitment from storage.
-- **All reviewers approved** (as of April 14), awaiting merge. May need rebasing after PR #11521 (Apr 14) and PR #11534 (Apr 16).
+- **Status**: Draft and merge-conflicted, with no activity since Apr 4. Earlier reviewer approvals do not make the current branch mergeable.
 
 From derekchiang's PR description:
 
 > This will allow a contract account to use precompiles for verification, while still having code that serves other purpose (e.g. for execution). As a side benefit, this also enables key rotation, since the precompile reads the public key commitment from storage.
 
-### PR #11555: Add support for guarantors (open since Apr 22)
+### PR #11555: Add support for guarantors (draft since Apr 22)
 
 **Author**: derekchiang
 
 - **Why**: Provides a public-mempool path for transactions whose sender VERIFY logic reads shared state (ERC-20 balances, environmental opcodes), which otherwise violates the restrictive tier's `storage reads only on tx.sender` rule.
 - **Proposed change**: Introduce a "guarantor" payer that pays for the transaction *even if sender validation fails*. When a guarantor is present, mempool nodes may skip sender-validation simulation entirely and propagate the transaction on the strength of the guarantor's signature alone.
 - **Consequence**: a transaction with a guarantor can use any sender validation logic (including shared-state reads and environmental opcodes) and still propagate through the public mempool. This could open a stricter public path for trustless ERC-20 balance-checking sponsors beyond today's risk-accepting non-canonical sponsor shape.
-- **Status**: Early proposal; Derek's description notes the authors are still iterating on the idea.
+- **Status**: Draft and merge-conflicted, with no activity since Apr 28.
 
 From derekchiang's PR description:
 
@@ -668,6 +787,7 @@ From derekchiang's PR description:
 - **Why**: An alternative to derekchiang's guarantors PR (#11555). Instead of introducing a new "guarantor" role with its own approval semantics, lightclient proposes simply relaxing the ordering rule so a payer can call `APPROVE_PAYMENT` before the sender approves execution. A payer that commits to paying gas before sender validation runs absorbs the same economic risk a guarantor would, without a new role in the spec.
 - **History**: same content was briefly auto-merged as #11575 on Apr 28 and reverted by #11579 on Apr 29 (lightclient intended it as a draft). Reopened as draft #11580 the same day.
 - **Status**: draft; the choice between this and #11555 (guarantors) is the open question for the next sync.
+- **Branch state**: Merge-conflicted and unchanged since May 15.
 
 From lightclient's PR description (carried over from #11575):
 
@@ -687,6 +807,7 @@ From lightclient's PR description (carried over from #11575):
   - **Surface area kept small**: zero new opcodes, zero new precompiles, zero account-RLP changes.
 - **Relationship to EIP-8250**: if PR #11681 lands, it supersedes EIP-8250 by absorption. The PR description argues explicitly against the requires-chain layering EIP-8250 introduced, on the grounds that a bundled upgrade is more efficient than three sibling EIPs with overlapping system contracts. This is the open architectural question on the table: compose-by-requires (EIP-8250's pattern) vs absorb-into-base (PR #11681's pattern).
 - **Status**: Open since May 16, with no activity since May 18 (only bot comments). As of June 15 the PR has passed the one-month-idle mark with no reviewer signoffs, while the compose-by-requires sibling stack grew to four EIPs over the same window. CI initially flagged commit-graph errors which were addressed in subsequent commits. Bot reports 1 more reviewer needed. Sits alongside #11555 (guarantors) as the active packaging question; #11555 may fold into #11681 if the absorption framing converges.
+- **July 25 review**: AnkushinDaniil argued that coupling the nonce channel to a registered signer is less flexible than EIP-8250's arbitrary keys and suggested splitting or rebasing the bundle.
 
 From pedrouid's PR description:
 
@@ -717,77 +838,53 @@ From vbuterin's PR description:
 
 > Adds a frame type for quantum-resistant Signature and STARK Aggregation. This supports signatures and STARKs (for privacy or for eg. L2s) in a post-quantum world in a highly gas-efficient way, by providing a way for transactions to declare them as "dependencies", in a way that allows the mempool and the block builder to replace them with a recursive STARK proving that they all exist.
 
-### PR #11935: Bound the signatures list (open since July 16)
-
-**Author**: svlachakis
-
-- **Why**: `signatures` is the only base variable-length list without an explicit count bound; empty `ARBITRARY` entries have zero signature gas and zero field-byte cost in the current formula.
-- **Proposed change**: add `MAX_SIGNATURES = 64` and reject longer lists.
-- **Status**: Open. lightclient prefers relying on the gas limit; svlachakis argues zero-cost empty entries can still force tens of thousands of pre-gas decode operations in a maximum-size transaction.
-
-### PR #11940: Specify EIP-3529 storage refund accounting (open since July 16)
-
-**Author**: svlachakis
-
-- **Why**: the base EIP does not define how storage refunds affect transaction gas used, receipts, payer charge, or reverted frame/batch journals.
-- **Proposed change**: one transaction-level refund counter with the EIP-3529 one-fifth cap.
-- **Status**: Open. soispoke requested explicit pre-refund/post-refund names, rollback semantics, the exact cap formula, and gross per-frame receipt gas.
-
-### PR #11942: Define receipt-network encoding (open since July 16)
-
-**Author**: svlachakis
-
-- **Why**: peers need a deterministic representation for the payer and per-frame receipt data used to reconstruct `receiptsRoot`.
-- **Proposed change**: encode frame transaction receipts in the fork's `Receipts` message as `[tx-type, cumulative-gas, payer, [[status, gas-used, logs], ...]]`.
-- **Status**: Open. lightclient supports keeping the encoding in the EIP until the matching devp2p protocol version specifies it.
-
-### PR #11955: Define approval rollback boundaries (open since July 17)
-
-**Author**: AnkushinDaniil
-
-- **Why**: a snapshot-based atomic-batch rollback can revert the nonce debit and collected maximum cost while leaving transaction-scoped `payer` set, creating an invalid refund path.
-- **Proposed change**: approval effects commit only when the enclosing frame succeeds, then survive later frame reverts and atomic-batch unrolls; invalid transactions and reorgs still discard them.
-- **Status**: Open. Review converged on per-scope effects and snapshot exemptions; the remaining point is that public-mempool simulation must continue until the enclosing frame completes, not stop at an inner `APPROVE`.
-
-### PR #11956: Batch sponsor repayment with user execution (open since July 17)
-
-**Author**: AnkushinDaniil
-
-- **Why**: Example 3 currently lets an ERC-20 repayment revert while a later unbatched user operation still executes on sponsor-paid gas.
-- **Proposed change**: the repayment begins an atomic batch and no `SENDER` frame may sit outside it; sponsor validation checks the complete frame list before approving payment.
-- **Status**: Open and intentionally ordered after #11955, whose approval-finality rule the example relies on.
-
 ### PR #11968: Make EIP-8250 changes additive (draft since July 18)
 
 **Author**: soispoke
 
 - **Why**: restating the complete base payload and `charged_gas` formula can make EIP-8250 look like it replaces unrelated EIP-8141 changes.
 - **Proposed change**: define only the nonce-field replacement and additive gas/floor terms, leaving every other base field and rule inherited.
-- **Status**: Draft; bot reports author approvals are satisfied.
+- **Status**: Draft; author approvals are satisfied, but the gas-formula wording predates merged PR #11969 and now needs reconciliation.
 
-### PR #11969: Apply charged_gas to fee settlement (draft since July 18)
-
-**Author**: soispoke
-
-- **Why**: PR #11941 defines `charged_gas`, but the later fee/refund text still settles from `tx_gas_limit` and `total_gas_used`, which can refund part of the calldata floor.
-- **Proposed change**: reserve `tx_gas_limit`, account block/receipt gas with `charged_gas`, collect maximum execution/blob cost, and refund the payer escrow and block gas pool separately.
-- **Status**: Draft; awaits an EIP-8141 author review.
-
-### PR #11970: Make EIP-8272 changes additive (draft since July 18)
+### PR #11970: Make EIP-8272 changes additive (open since July 18)
 
 **Author**: soispoke
 
 - **Why**: EIP-8272's full payload and gas-formula restatement risks replacing newer base-spec fields and costs.
 - **Proposed change**: specify only insertion of `recent_root_references` and its additive data, intrinsic, floor, and activation rules.
-- **Status**: Draft; bot reports author approvals are satisfied.
+- **Status**: Ready for review; author approvals are satisfied.
 
-### PR #11971: Clarify decoding, signing, and activation (draft since July 19)
+### PR #12007: Define transaction replacement and payer exposure (open since July 23)
 
-**Author**: soispoke
+**Author**: svlachakis
 
-- **Why**: the base EIP leaves exact RLP shapes, non-mutating sighash construction, P256 validation rules, and `EXPIRY_VERIFIER` activation underspecified.
-- **Proposed change** (+38/-5): pin nine-element payload/six-element frame/four-element signature decoding, construct a separate signing payload, require EIP-7951 P256 validation, and define the activation-state transition.
-- **Status**: Draft; awaits an EIP-8141 author review.
+- **Why**: one payer may underwrite many senders, so nodes need deterministic replacement and bounded local escrow exposure.
+- **Proposed change**: replacement identity `(sender, nonce)`, fee-bump rules, per-payer exposure reservation, payer revalidation, and a defined eviction order.
+- **Status**: AnkushinDaniil approved; awaiting an EIP-8141 author review.
+
+### PR #12008: Define transaction-level logs (open since July 23)
+
+**Author**: svlachakis
+
+- **Why**: the EIP defines frame receipts but not the canonical transaction log list.
+- **Proposed change**: concatenate logs from successful frames in execution order; discard logs from reverted frames and unrolled batches.
+- **Status**: AnkushinDaniil approved. The branch currently needs rebasing.
+
+### PR #12011: Formalize the protocol signature-scheme registry (open since July 24)
+
+**Author**: AnkushinDaniil
+
+- **Why**: future fixed-cost schemes need a governed path into the outer signature list without consuming the `ARBITRARY` escape hatch.
+- **Proposed change**: reserve scheme IDs `0x03` through `0xff` for protocol-defined verifiers, pin signer derivation and upgrade rules, and account for future aggregation.
+- **Status**: svlachakis approved; review remains open.
+
+### PR #12012: Implement the canonical paymaster (draft since July 24)
+
+**Author**: svlachakis
+
+- **Why**: the current EIP recognizes a canonical-paymaster runtime but does not fully specify its storage, signer rotation, or withdrawal lifecycle.
+- **Proposed change**: define the reference implementation, signer at signature index `1`, delayed signer rotation and withdrawals, and a per-fork pinned code hash.
+- **Status**: Draft with no reviewer approvals yet.
 
 ---
 
@@ -879,3 +976,38 @@ From vbuterin's PR description:
 
 - #11972 proposed a `NONCE_MANAGER` collision guard and invalid-block rule for non-empty activation state; #11973 proposed non-mutating EIP-8272 sighash wording and a `RECENT_ROOT_ADDRESS != EXPIRY_VERIFIER` guard.
 - Both draft PRs were self-closed within minutes without a recorded rationale. Neither changed the merged specifications.
+
+### PR #11935: Bound the signatures list (closed July 20)
+
+**Author**: svlachakis
+
+- Proposed `MAX_SIGNATURES = 64` to bound decoding work.
+- Closed when PR #11976 priced every `ARBITRARY` entry at 100 gas, using the transaction gas limit instead of a separate count constant.
+
+### PR #11956: Batch sponsor repayment with user execution (closed July 21)
+
+**Author**: AnkushinDaniil
+
+- Proposed one atomic batch spanning ERC-20 repayment and user execution.
+- lightclient closed it after PR #11955 chose to exclude `VERIFY` frames from atomic batches, making the proposed structure invalid and the separate patch unnecessary.
+
+### PR #11971: Clarify decoding, signing, and activation (closed July 27)
+
+**Author**: soispoke
+
+- Proposed exact RLP shapes, non-mutating sighash construction, P256 validation, and expiry-verifier activation wording.
+- Closed after PR #11984 resolved the P256 portion; lightclient questioned whether the remaining changes justified a combined patch.
+
+### PR #12004: Add a canonical P256 pseudo-account (closed July 24)
+
+**Author**: AnkushinDaniil
+
+- Proposed a reserved pseudo-account for protocol P256 verification.
+- lightclient argued that P256 is a cryptographic operation, not a complete account interface: the pseudo-account would lack ERC-1271, permit, callbacks, and self-deployment. The author agreed and closed it.
+
+### PR #12010: Stabilize the canonical-paymaster identity (closed July 24)
+
+**Author**: AnkushinDaniil
+
+- Proposed recognizing a canonical paymaster through stable identity and deployment rules.
+- Closed after review found its EIP-7702 recognition model unsound. The useful pinned-code-hash piece continues in draft PR #12012.

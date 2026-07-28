@@ -43,14 +43,15 @@ signatures = [[scheme, signer, msg, signature], ...]
 - Each frame has a `mode` (lower 8 bits only), a `flags` field (approval scope + atomic batch), a `target` address (or null for sender), a gas limit, a `value` field (ETH to transfer in the top-level frame call, non-zero only in `SENDER` frames), and arbitrary data
 - `signatures` is a list of signature objects on the outer transaction, verified before any frame executes for protocol-validated schemes. During execution, signer identity and signature validity are already established for `SECP256K1` and `P256`; custom schemes carry witness bytes as `ARBITRARY` signatures and validate them in account code.
 - Up to 64 frames per transaction
+- The three fee fields must fit in 256 bits (PR #12005, merged Jul 23). Blob hashes must be 32-byte KZG versioned hashes; `max_fee_per_blob_gas` must be zero when no blobs are attached.
 
 Signature schemes:
 
-| Scheme | Name | Protocol validation |
-|---|---|---|
-| `0x0` | `ARBITRARY` | No cryptographic validation by the protocol; `signer` must be empty. Raw bytes are introspectable through `SIGPARAM`. |
-| `0x1` | `SECP256K1` | 65-byte `v || r || s`; `v` is `0` or `1`, and `r`/`s` are canonical with low-`s`. Signer is a 20-byte address or empty for `tx.sender`. |
-| `0x2` | `P256` | `r || s || qx || qy`, signer address is `keccak256(qx || qy)[12:]` or empty for `tx.sender`. |
+| Scheme | Name | Protocol validation | Gas |
+|---|---|---|---|
+| `0x0` | `ARBITRARY` | No cryptographic validation by the protocol; `signer` must be empty. Raw bytes are introspectable through `SIGPARAM`. | 100 |
+| `0x1` | `SECP256K1` | 65-byte `v || r || s`; `v` is `0` or `1`, and `r`/`s` are canonical with low-`s`. Signer is a 20-byte address or empty for `tx.sender`. | 2,800 |
+| `0x2` | `P256` | `r || s || qx || qy`; `r` is in range and `s` is low relative to `SECP256R1N` (PR #11984, merged Jul 21). The signer is `keccak256(qx || qy)[12:]` or empty for `tx.sender`. | 6,700 |
 
 `SIGPARAM (0xb4)` exposes signature metadata to EVM code. It intentionally does not expose raw signature bytes for protocol-validated schemes, preserving future aggregation. For `ARBITRARY` entries, `SIGPARAM` can copy the raw witness bytes into memory so custom verifiers can validate schemes the protocol does not understand.
 
@@ -66,7 +67,7 @@ Frame-data access has explicit stack order: `FRAMEDATALOAD` pops `offset` from t
 
 **Flags (separate field, introduced by PR #11521):**
 - Bits 0-1: Approval scope constraint (limits which `APPROVE` scope can be used)
-- Bit 2: Atomic batch flag (groups consecutive frames of any mode into an all-or-nothing batch; the restrictive mempool tier separately forbids the flag inside the validation prefix). PR #11652 (merged May 12) lifted the previous SENDER-only restriction.
+- Bit 2: Atomic batch flag, valid only on `DEFAULT` and `SENDER`. A flagged frame must be followed by another non-`VERIFY` frame, so no `VERIFY` frame can be inside or terminate a batch.
 
 ## The APPROVE Mechanism
 
@@ -83,6 +84,8 @@ Frame-data access has explicit stack order: `FRAMEDATALOAD` pops `offset` from t
 
 **Security**: Only the resolved frame target can call `APPROVE` (`ADDRESS == resolved_target` check). `APPROVE` exceptional-halts outside frame-transaction execution. The requested scope must be non-zero and must fit the frame's allowed scope bits. `sender_approved` must be true before payment-only approval can set the payer.
 
+**Gas**: `APPROVE` has no base cost beyond memory expansion for its return-data region, matching `RETURN`. Its once-per-transaction nonce, payer, and maximum-cost effects are covered by the transaction intrinsic cost (PR #12003, merged Jul 23).
+
 ## Execution Flow
 
 For each frame transaction:
@@ -94,7 +97,7 @@ For each frame transaction:
    - **DEFAULT mode**: caller = `ENTRY_POINT`, execute as regular call to `resolved_target`
    - **VERIFY mode**: caller = `ENTRY_POINT`, execute as STATICCALL to `resolved_target`; approval-bearing validation frames must call `APPROVE`
    - **SENDER mode**: requires `sender_approved == true`, caller = `tx.sender`, target = `resolved_target`. If caller lacks balance for `frame.value`, the frame reverts (ordinary CALL value-transfer semantics).
-5. After all frames: verify `payer != None`, refund unpaid gas to the payer
+5. After all frames: verify `payer != None`, apply the transaction-level storage refund and calldata floor, charge the payer for final `gas_used` plus any blob base fee, and return `payer_refund`
 
 Execution approval is transaction-wide. Once `sender_approved` is set, every later `SENDER` frame is authorized, not only the frame the validator inspected. Custom validation must therefore commit to the complete later frame list or constrain every later `SENDER` frame before calling `APPROVE` (PR #11939, merged Jul 17).
 
@@ -118,7 +121,7 @@ This means **any EOA can use frame transactions today**, no smart contract deplo
 
 ## Atomic Batching
 
-Consecutive frames with bit 2 of `flags` set form an atomic batch. Any frame mode can participate (PR #11652 merged May 12 lifted the previous SENDER-only restriction). The batch is the maximal contiguous run of flagged frames terminated by a frame without the flag:
+Consecutive frames with bit 2 of `flags` set form an atomic batch. The batch is the maximal contiguous run of flagged frames terminated by a frame without the flag:
 
 ```
 Frame 0: (atomic flag set)   ─┐
@@ -128,31 +131,63 @@ Frame 3: (atomic flag set)   ─│ Batch 2
 Frame 4: (flag not set)      ─┘
 ```
 
-If any frame in a batch reverts, the state is restored to before the batch started, and remaining frames in the batch are skipped. Skipped frames record receipt status `0x2`; PR #11953 (merged Jul 17) corrected the earlier draft value `0x3` because `0x2` is the next available status code. The restrictive mempool tier separately forbids the atomic-batch flag inside the validation prefix, so this protocol-level expansion does not loosen what the public mempool admits. This enables safe patterns like "approve + swap" where both must succeed.
+Only `DEFAULT` and `SENDER` frames may participate. PR #11652 (merged May 12) originally opened batching to every mode; PRs #11955 and #11987 (merged Jul 21) moved the VERIFY exclusion into consensus-validity rules so a batch cannot roll back approval effects or skip validation. If any frame in a batch reverts, the state is restored to before the batch started, and remaining frames in the batch are skipped. Skipped frames record receipt status `0x2`; PR #11953 (merged Jul 17) corrected the earlier draft value `0x3`. This enables safe patterns like "approve + swap" where both execution frames must succeed.
 
 ## Gas Accounting
 
-```
-tx_gas_limit = (
-    15000
+```python
+standard_gas_limit = (
+    15_000
     + 475 * len(tx.frames)
-    + sum(calldata_cost(frame.data) for frame in tx.frames)
-    + sum(calldata_cost(sig.signer) + calldata_cost(sig.msg) + calldata_cost(sig.signature) for sig in tx.signatures)
-    + sum(signature_verification_cost(sig) for sig in tx.signatures)
+    + frame_data_cost
+    + signature_data_cost
+    + signature_verification_cost
     + sum(frame.gas_limit for frame in tx.frames)
 )
+
+calldata_floor_gas = (
+    15_000
+    + 475 * len(tx.frames)
+    + signature_verification_cost
+    + TOTAL_COST_FLOOR_PER_TOKEN * calldata_tokens
+)
+
+max_gas = max(standard_gas_limit, calldata_floor_gas)
 ```
 
-Each frame incurs a per-frame cost of `FRAME_TX_PER_FRAME_COST` (475 gas) on top of the intrinsic cost. Gas is charged for the actual frame data and signature data bytes, not for an RLP-encoded aggregate payload. Protocol-validated signatures also add their intrinsic verification costs. Each frame has its own gas allocation. Unused gas is **not** carried to subsequent frames.
+Each frame has its own gas allocation, and unused gas is **not** carried to later frames. `ARBITRARY`, secp256k1, and P256 signature entries add 100, 2,800, and 6,700 gas respectively; PR #11976 (merged Jul 20) added the 100-gas arbitrary-entry charge to bound decode work without a `MAX_SIGNATURES` constant.
 
-PR #11941 (merged Jul 17) applies the EIP-7623 calldata floor to frame and signature data. Define `calldata_tokens` with EIP-7623's token count over those bytes; actual charged gas is the fixed intrinsic/per-frame/signature cost plus the larger of `(data cost + execution gas)` and `TOTAL_COST_FLOOR_PER_TOKEN * calldata_tokens`. The transaction must reserve enough gas for that floor even when execution is cheap.
+Storage refunds follow EIP-3529 at transaction scope. Counter changes from a reverted frame or unrolled batch are discarded, and the refund is capped at one fifth of pre-refund gas:
 
-The merged text still calculates the later fee/refund path from `tx_gas_limit` and unused frame gas, so it can refund part of the new floor. Draft PR #11969 proposes settling payer escrow, block gas, and receipt gas consistently from `charged_gas`; that reconciliation is not yet part of the current spec.
-
-The total fee is:
+```python
+gas_used_before_refund = standard_gas_limit - tx_unused_gas
+applied_refund = min(refund_counter, gas_used_before_refund // 5)
+gas_used_after_refund = gas_used_before_refund - applied_refund
+gas_used = max(gas_used_after_refund, calldata_floor_gas)
 ```
-tx_fee = tx_gas_limit * effective_gas_price + blob_fees
+
+PR #11940 (merged Jul 21) pinned the refund counter and gross per-frame receipt semantics. PR #11969 (merged Jul 28) completed settlement so the EIP-7623 floor cannot be refunded away:
+
+```python
+blob_gas = len(blob_versioned_hashes) * GAS_PER_BLOB
+max_cost = max_gas * max_fee_per_gas + blob_gas * blob_base_fee
+charged_fee = gas_used * effective_gas_price + blob_gas * blob_base_fee
+payer_refund = max_cost - charged_fee
 ```
+
+`max_cost` must fit in one EVM word. Payment approval collects it from the payer before execution; settlement returns `payer_refund` and restores `max_gas - gas_used` to the block gas pool. Per-frame receipts report gross frame gas, so their sum generally differs from transaction-level `gas_used`.
+
+## Blob Support
+
+Frame transactions may carry blobs. Each hash must be a KZG versioned hash; blob-carrying transactions follow EIP-4844 inclusion, blob-gas, and `BLOBHASH` rules, while using the EIP-7594 pooled-transaction sidecar wrapper. A blobless frame transaction must set `max_fee_per_blob_gas = 0`.
+
+The payer covers `blob_gas * blob_base_fee`. `max_fee_per_blob_gas` is only an inclusion cap, not an escrow price, and blob fees are not refunded based on frame outcomes. Because blobs are optional, the same transaction type supports ordinary calls and gas-sponsored data posting (PR #11985, merged Jul 23).
+
+## Receipt and Network Encoding
+
+The consensus receipt payload is `[cumulative_gas_used, payer, [frame_receipt, ...]]`, with each frame receipt encoded as `[status, gas_used, logs]`. The fork's `Receipts` message wraps this as `[tx-type, cumulative-gas, payer, [[status, gas-used, logs], ...]]` (PR #11942, merged Jul 20). Per-frame `gas_used` is gross, before the transaction-level storage refund and calldata floor.
+
+Blob-carrying frame transactions use the EIP-7594 sidecar wrapper in `PooledTransactions`; block-body responses contain the plain transaction payload. Blobless frame transactions use the plain payload everywhere.
 
 ## Canonical Signature Hash
 
@@ -184,7 +219,7 @@ Constraints:
 - At most one expiry-verifier frame per transaction
 - The frame succeeds without calling `APPROVE`; public-mempool validation shapes (`self_verify`, `only_verify`, and `pay`) are the approval-bearing frames. PR #11662 relaxed the previously-uniform "every VERIFY frame must call APPROVE" rule to "if the frame reverts, the transaction is invalid".
 
-Mempool admission: if present, an expiry-verifier frame may only be the first frame in the frame list for public propagation. Nodes MUST drop a transaction from the public mempool whose expiry is less than the node's current view of `block.timestamp` at any point. Expiry-verifier frames are exempt from validation trace rules, storage-dependency tracking, and `MAX_VERIFY_GAS`. The `TIMESTAMP` opcode is permitted only in an expiry-verifier frame executing the canonical runtime code. Clients may omit explicit EVM execution and perform the deadline check natively when the externally observable result is identical.
+Mempool admission: if present, an expiry-verifier frame may only be the first frame in the frame list for public propagation. Nodes MUST drop a transaction from the public mempool whose expiry is less than the node's current view of `block.timestamp` at any point. The `TIMESTAMP` opcode is permitted only in an expiry-verifier frame executing the canonical runtime code. Clients may omit explicit EVM execution and perform the deadline check natively when the externally observable result is identical, but its validation work still counts against `MAX_VERIFY_GAS`.
 
 Validation-prefix shape matching treats expiry-verifier frames as transparent: `[expiry_verify, self_verify]` is recognized as `[self_verify]` for admission-rule purposes.
 
@@ -217,6 +252,8 @@ Rules enforced during validation prefix:
 - No calls to non-existent contracts or EIP-7702 delegations (except deploy-frame default-code behavior at `tx.sender`)
 - Deploy-frame target may be any contract, provided its execution satisfies the trace rules above. EIP-7997 is the canonical-but-non-mandatory factory; cross-chain-stable factory addresses are typically acquired through it (PR #11567)
 
+When every validation-prefix frame has protocol-defined semantics (default code, the canonical expiry verifier, or the canonical paymaster), nodes may evaluate those semantics directly instead of executing EVM code. Direct evaluation must enforce the same gas and paymaster rules and track the sender, payer, expiry-code/deadline, and timestamp dependencies for revalidation (PR #12001, merged Jul 23).
+
 **Canonical paymaster**: verified by runtime code match, uses reserved balance accounting. The canonical paymaster handles ETH-funded sponsorship only (the paymaster covers gas from its own ETH balance, with no token-level repayment flow). ERC-20 gas repayment is a separate non-canonical paymaster design space: a public-mempool sponsor can inspect signature metadata and the next SENDER frame while accepting sponsee frontrunning risk; a fully trustless onchain balance-checking variant exceeds the restrictive tier and routes privately or through an expansive tier. See [Mempool Strategy → ERC-20 gas repayment](/mempool-strategy#erc20-paymaster-patterns).
 ```python
 available = balance(paymaster) - reserved_pending_cost - pending_withdrawal_amount
@@ -232,7 +269,7 @@ available = balance(paymaster) - reserved_pending_cost - pending_withdrawal_amou
 
 | Frame | Mode | Target | Data |
 |---|---|---|---|
-| 0 | VERIFY | sender | ECDSA signature |
+| 0 | VERIFY | sender | Empty; uses outer signature index `0` |
 | 1 | SENDER | target | call data |
 
 Frame 0 verifies the signature and calls `APPROVE(0x3)`. Frame 1 executes.
@@ -292,7 +329,7 @@ The sponsor pays ETH gas; frame 2 repays the sponsor in ERC-20 tokens.
 - **ORIGIN returns frame caller**: Changed from traditional tx.origin behavior (precedent set by EIP-7702).
 - **Transient storage cleared between frames**: TSTORE/TLOAD state doesn't persist across frames.
 - **Warm/cold state shared across frames**: Gas accounting for storage access is shared.
-- **Requires**: EIP-1559, EIP-2718, EIP-3607, EIP-4844, EIP-7623, EIP-7702 (PR #11567 merged Apr 30 dropped EIP-7997; PR #11272 merged May 5 added EIP-3607 with an explicit carve-out; PR #11621 merged May 11 added EIP-7623 (calldata gas pricing) and EIP-7702 (delegation indicators), formalizing dependencies that were previously implicit in spec text).
+- **Requires**: EIP-1559, EIP-2718, EIP-3529, EIP-3607, EIP-4844, EIP-7594, EIP-7623, EIP-7702. July refund and blob merges added EIP-3529 and EIP-7594; EIP-7997 remains optional.
 
 ## Related Proposals
 
@@ -302,13 +339,13 @@ The sponsor pays ETH gas; frame 2 repays the sponsor in ERC-20 tokens.
 | EIP-7702 | Complementary; 7702 accounts can also use frame transactions. Note: 7702-delegated accounts cannot currently use default code signature verification (gap identified by DanielVF) |
 | ERC-7562 | 8141's mempool rules are inspired by but simpler than 7562 (no staking/reputation) |
 | EIP-8175 | Competing alternative: flat capabilities + programmable fee_auth, 4 new opcodes |
-| EIP-8130 | Coinbase/Base's alternative: declared authenticators (formerly verifiers), no wallet code execution during validation, active through Jul 20. See [Competing Standards](./competing-standards) |
+| EIP-8130 | Coinbase/Base's alternative: declared authenticators (formerly verifiers), no wallet code execution during validation, active through Jul 28. See [Competing Standards](./competing-standards) |
 | EIP-7997 | Canonical deterministic factory predeploy; recommended for cross-chain-stable factory addresses but no longer a hard dependency after PR #11567 (merged Apr 30) |
 | EIP-7392 | Signature registry; interoperability PR #11455 was closed without merge on Apr 23 |
 | EIP-8250 | Keyed-nonces sibling EIP (PR #11598 merged May 11; PR #11749 merged Jun 1 generalized single keyed nonce to a bounded key set). First EIP whose `requires` header includes EIP-8141; layers `(nonce_keys, nonce_seq)` replay protection on top of EIP-8141 via a `NONCE_MANAGER` system contract. July fixes restored the signatures field, priced nonce data under EIP-7623, and moved `TXPARAM_NONCE_KEY_0` to non-conflicting selector `0x10` (PR #11966) |
 | EIP-8266 | Expiring-nonces sibling EIP (PR #11692 merged May 22, co-authored by nerolation and lightclient); second EIP in the compose-by-requires AA stack, with `requires` including both EIP-8141 and EIP-8250. Sentinel-mode (`tx.nonce == 2**64 - 1`) plus a `NONCE_RING` system contract; complements PR #11662's per-tx `EXPIRY_VERIFIER` frame by scoping nonces themselves to time windows |
 | EIP-8272 | Recent-roots sibling EIP (PR #11726 merged Jun 5 by soispoke, vbuterin, nerolation); third compose-by-requires sibling, requires both EIP-7843 and EIP-8141. Adds a `recent_root_references` outer-envelope field, a `RECENT_ROOT_ADDRESS` system contract with 8192-slot ring, `TXPARAM_RECENT_ROOT_REFERENCE_COUNT (0x0f)` (PR #11930), and `RECENTROOTREFLOAD (0xb5)` (PR #11967). July fixes also restored signatures and signature costs and hardened expiry/reorg mempool handling |
-| EIP-8288 (pending) | PQ signature and STARK aggregation sibling EIP (PR #11772 opened Jun 5 by vbuterin and Thomas Coratger); fourth compose-by-requires sibling. Still open as of Jul 20 with requested changes and proof-security review. Adds a new `DEP_VERIFY_FRAME_MODE = 3` frame mode declaring `(scheme, data_hash, verification_key)` dependencies, and a block-header `recursive_stark` field that aggregates all per-block dependencies into one recursive STARK using Lean Ethereum tooling (`LEANSPHINCS_SCHEME`, `LEANSTARK_SCHEME`). FOCIL-compatible |
+| EIP-8288 (pending) | PQ signature and STARK aggregation sibling EIP (PR #11772 opened Jun 5 by vbuterin and Thomas Coratger); fourth compose-by-requires sibling. Still open as of Jul 28, with no new review since Jul 9. Adds a new `DEP_VERIFY_FRAME_MODE = 3` frame mode declaring `(scheme, data_hash, verification_key)` dependencies, and a block-header `recursive_stark` field that aggregates all per-block dependencies into one recursive STARK using Lean Ethereum tooling (`LEANSPHINCS_SCHEME`, `LEANSTARK_SCHEME`). FOCIL-compatible |
 | ERC-8286 (draft) | First application-layer standard built on EIP-8141, and the first frame-transaction proposal in the ERCs repo (ERC PR #1794 opened Jun 3 by chiranjeev13). Defines how ERC-7579 modular accounts (validator, executor, hook, config modules) implement the frame-transaction validation flow: a validator module returns an approval mode the account applies via `APPROVE` during a VERIFY frame. Standardizes the permissions and session-key layer that protocol defaults leave open |
 
 ## Key Takeaway
@@ -318,6 +355,6 @@ A frame transaction is a sequence of purpose-labeled sub-calls. The protocol run
 ## Read Next
 
 - [EOA Support](/eoa-support) — what existing codeless accounts get for free, and how default code replaces EIP-7702 delegation for common cases.
-- [Feedback Evolution](/feedback-evolution) — how the spec got to its current shape through twenty-three phases of community review.
+- [Feedback Evolution](/feedback-evolution) — how the spec got to its current shape through twenty-four phases of community review.
 - [Mempool Strategy](/mempool-strategy) — why the validation prefix is the way it is, and how the two-tier mempool handles everything that doesn't fit.
 - [Competing Standards](/competing-standards) — how EIP-8141 compares to EIP-8130, EIP-8175, EIP-8202, and the sibling proposals.

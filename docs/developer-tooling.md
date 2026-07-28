@@ -12,7 +12,9 @@ When AA ships without protocol-level defaults, every common feature (batching, s
 
 **If you're building a wallet:**
 - Plan to drop bundler, EntryPoint, and UserOperation infrastructure from the 8141 path. Frame transactions enter the public mempool directly.
-- Existing EOA addresses keep working. No migration, no smart-account deployment, and no 7702 delegation required. Default code handles secp256k1 and ETH transfer out of the box. P256/passkeys are protocol-validated in the outer signatures list, but codeless EOA default code does not accept them.
+- Existing EOA addresses keep working. No migration, no smart-account deployment, and no 7702 delegation required. Default code handles secp256k1 and ETH transfer out of the box. P256/passkeys are protocol-validated in the outer signatures list, but codeless EOA default code does not accept them; P256 signers must emit canonical low-`s` (PR #11984).
+- Custom signature witnesses use `ARBITRARY` entries and now cost 100 gas each (PR #11976), so wallet estimators must include every outer entry.
+- Frame transactions support blobs through the EIP-7594 pooled-transaction wrapper (PR #11985). Wallet fee estimation must reserve `max_gas` plus blob gas and display the final `payer_refund` (PR #11969); every fee field must be below `2**256` (PR #12005).
 - Session keys, multisig, social recovery, and richer permissions still need account code or ERC standardization. Protocol defaults do not cover these.
 - For high-throughput gas sponsorship, prefer the canonical paymaster for the public-mempool path (ETH-funded only). A codeless EOA sponsor can use payment-only default VERIFY at signature index `1` while the sender uses index `0`, but remains subject to the one-pending-transaction non-canonical-paymaster cap.
 - **ERC-20 gas repayment has a public/private split.** A public non-canonical sponsor can inspect the next ERC-20 transfer frame and propagate through the restrictive mempool, but it accepts the risk that the user drains the token balance before inclusion. A trustless balance-checking paymaster reads token storage and must route through the expansive tier or a private mempool. See [Mempool Strategy → ERC-20 gas repayment](/mempool-strategy#erc20-paymaster-patterns).
@@ -64,7 +66,9 @@ EIP-8141 already provides protocol-level defaults for the most common features:
 - **Default code for EOAs**: secp256k1 signature verification without account migration, smart account deployment, or EIP-7702 delegation. Existing EOAs send frame transactions and the protocol handles the default signature path automatically. Execution approval uses signature index `0`; payment-only EOA sponsorship uses index `1` (PR #11954). P256 is available as a protocol-validated outer signature scheme, but accounts need code to use it for authorization.
 - **Native ETH transfers**: SENDER frames carry a `frame.value` field (PR #11534, Apr 16), so wallets build simple ETH sends as one SENDER frame with `target = destination, value = amount` rather than shipping RLP call-list boilerplate in default code.
 - **ETH-funded gas sponsorship via the canonical paymaster**: a protocol-blessed sponsorship contract that the public mempool validates efficiently. Wallets routing through it inherit FOCIL compatibility. The canonical paymaster handles ETH-funded sponsorship only; ERC-20 gas repayment is a separate design space with two independent EIP-8141 patterns (see caveat below). Adoption risk is tracked as an [open question](/mempool-strategy#canonical-paymaster-adoption).
-- **Atomic batching**: expressed via bit 2 of `frame.flags` on consecutive frames of any mode, with the restrictive mempool tier forbidding the flag inside the validation prefix. No wallet-level RPC standard needed, no separate ERC for batch semantics.
+- **Atomic batching**: expressed via bit 2 of `frame.flags` on consecutive DEFAULT or SENDER frames. VERIFY cannot participate in or terminate a batch (PRs #11955 and #11987). No wallet-level RPC standard needed, no separate ERC for batch semantics.
+- **Receipts and fees**: per-frame receipts expose gross gas (PR #11940), so their values may not sum to final transaction gas after the transaction-level refund and calldata floor (PR #11969). Wallets should use transaction `gas_used` for final cost and frame receipts for diagnostics.
+- **APPROVE pricing**: the opcode has no base gas charge and pays only memory expansion (PR #12003), simplifying validation-code estimation.
 - **Escape hatch**: arbitrary EVM in VERIFY/SENDER frames for the configurability cases, routed via the expansive tier or private mempool when it exceeds restrictive rules.
 
 The adoption cost reduces to "implement a new transaction type" rather than "deploy/audit a smart account and run relayer infrastructure on every chain." The "no relayer" claim is strongest for onchain variants that route through the expansive tier or private mempool, including privacy rebroadcasters and trustless ERC-20 balance-checking sponsors. Wallets that prefer the public mempool can use a non-canonical ERC-20 sponsor that checks frame shape, but that sponsor accepts sponsee frontrunning risk. See [Mempool Strategy](/mempool-strategy#why-frame-transactions-dont-need-relayers).
@@ -87,12 +91,12 @@ Protocol defaults cover batching, signatures, and ETH-funded sponsorship. They d
 
 | Feature area | Default covers? | Public-mempool? | ERC work still needed? |
 |---|---|---|---|
-| Atomic batching | Yes (flags field, bit 2) | Yes | No |
+| Atomic batching | Yes (flags field, bit 2 on DEFAULT/SENDER) | Yes | No |
 | Gas sponsorship, native ETH | Yes (canonical paymaster) | Yes | No for basic case |
 | Gas sponsorship, ERC-20 - public risk-accepting sponsor | Consensus-valid, not a protocol default | **Yes** (1 pending per non-canonical paymaster) | Sponsor risk controls / signing-infra work |
 | Gas sponsorship, ERC-20 - trustless balance-checking sponsor | Consensus-valid, not a protocol default | **No** (expansive/private only) | Contract deployment; expansive-tier routing |
 | secp256k1 signatures | Yes (default code) | Yes | No |
-| P256 / passkeys | Protocol-validated outer signature scheme, not default-code authorization | Yes when account code fits the restrictive tier | Account-code or ERC work |
+| P256 / passkeys | Canonical low-`s` outer signature scheme, not default-code authorization | Yes when account code fits the restrictive tier | Account-code or ERC work |
 | Post-quantum signatures | Via account code or precompiles | Depends on scheme cost vs 100k cap | Scheme-by-scheme ERCs expected |
 | Permissions / session keys | No | Depends on validation shape | Yes (ERC-7710/7715 vs ERC-7895 divergence exists) |
 | Social recovery | No | Typically no | Yes |

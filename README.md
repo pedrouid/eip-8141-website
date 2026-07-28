@@ -2,7 +2,7 @@
 
 Comprehensive analysis of [EIP-8141](https://eips.ethereum.org/EIPS/eip-8141) (Frame Transaction) - tracking its origin, evolution through community feedback, competing proposals, and open concerns.
 
-Last updated: July 20, 2026. Tracks EIP-8141 through the July 17 implementation-clarification merges (#11953, #11954, #11937-#11941); EIP-8250/EIP-8272 corrections through #11967; the main discussion through post #165; and EIP-8130 through AllWalletDevs #40 plus draft ERC-8340.
+Last updated: July 28, 2026. Tracks EIP-8141 through the complete fee-settlement merge (#11969), including July signature pricing, refund, batching, P256, blob, receipt, and mempool clarifications (#11976, #11942, #11955, #11940, #11984-#11985, #11987, #12001, #12003, #12005); the main discussion remains at post #165; competing proposals and sibling EIPs have no newer merged changes.
 
 ## Documents
 
@@ -11,7 +11,7 @@ Last updated: July 20, 2026. Tracks EIP-8141 through the July 17 implementation-
 | Document | Description |
 |---|---|
 | [Current Spec Overview](./docs/current-spec.md) | What EIP-8141 can do today - execution model, mempool model, transaction structure, opcodes, examples |
-| [Feedback Evolution](./docs/feedback-evolution.md) | How community feedback shaped the spec across 23 phases |
+| [Feedback Evolution](./docs/feedback-evolution.md) | How community feedback shaped the spec across 24 phases |
 | [Original Spec](./docs/original-spec.md) | The Jan 29 submission - original design and what it lacked |
 | [Merged Changes](./docs/merged-changes.md) | Every PR (merged, rejected, open) in chronological order with rationale |
 | [Original vs Latest](./docs/original-vs-latest.md) | Side-by-side comparison of structural changes and philosophical shifts |

@@ -39,11 +39,13 @@ The restrictive tier covers a small surface:
 - **Account deployment**: deploy frame as the first frame, targeting any factory whose execution satisfies the deploy-frame trace rules. EIP-7997 is the canonical-but-non-mandatory factory after PR #11567 (merged Apr 30) dropped it from `requires` and rewrote the rule as a stateless-trace policy.
 - **Non-canonical paymaster**: bounded to 1 pending tx per paymaster
 
-Validation constraints: one of four prefix shapes, validation-prefix gas plus intrinsic signature-validation cost no more than 100k, banned opcodes (ORIGIN, TIMESTAMP, BLOCKHASH, BALANCE, SSTORE, etc.), storage reads only on `tx.sender`, no calls to non-existent contracts, matching approval-scope flags, no atomic-batch flag inside the validation prefix, and no VERIFY frame after the validation prefix. `CREATE`, `CREATE2`, and `SETDELEGATE` (EIP-7819) are banned outside the first deploy frame and allowed inside it for installing code at `tx.sender` (PR #11567); `SSTORE`s on `tx.sender`'s storage are also allowed inside the deploy frame.
+Validation constraints: one of four prefix shapes, validation-prefix gas plus intrinsic signature-validation cost no more than 100k, banned opcodes (ORIGIN, TIMESTAMP, BLOCKHASH, BALANCE, SSTORE, etc.), storage reads only on `tx.sender`, no calls to non-existent contracts, matching approval-scope flags, and no VERIFY frame after the validation prefix. Consensus rules now forbid VERIFY inside an atomic batch (PRs #11955 and #11987), and simulation may stop only after the payer-setting frame completes successfully. `CREATE`, `CREATE2`, and `SETDELEGATE` (EIP-7819) are banned outside the first deploy frame and allowed inside it for installing code at `tx.sender` (PR #11567); `SSTORE`s on `tx.sender`'s storage are also allowed inside the deploy frame.
 
-**Expiry-verifier frames** (PR #11662, merged May 14; tightened by #11814 on Jul 7) are admitted as a special case: a `VERIFY` frame targeting `EXPIRY_VERIFIER = address(0x8141)` carries an 8-byte unix-seconds deadline as `frame.data`, may appear only as the first frame for public propagation, and is exempt from validation trace rules, storage-dependency tracking, and `MAX_VERIFY_GAS`. The `TIMESTAMP` opcode is permitted only for the canonical runtime code at this address. Public-mempool nodes MUST drop transactions whose expiry is in the past relative to their current view of `block.timestamp`. Validation-prefix shape matching treats expiry-verifier frames as transparent (`[expiry_verify, self_verify]` matches `[self_verify]`).
+**Expiry-verifier frames** (PR #11662, merged May 14; tightened by #11814 on Jul 7) are admitted as a special case: a `VERIFY` frame targeting `EXPIRY_VERIFIER = address(0x8141)` carries an 8-byte unix-seconds deadline as `frame.data` and may appear only as the first frame for public propagation. Its protocol-defined behavior avoids EVM trace and storage-dependency checks, but its gas still counts toward `MAX_VERIFY_GAS`. The `TIMESTAMP` opcode is permitted only for the canonical runtime code at this address. Public-mempool nodes MUST drop transactions whose expiry is in the past relative to their current view of `block.timestamp`. Validation-prefix shape matching treats expiry-verifier frames as transparent (`[expiry_verify, self_verify]` matches `[self_verify]`).
 
-What this enables: default-code secp256k1 EOAs, smart accounts with bounded validation, protocol-validated outer signatures (`SECP256K1` and `P256`), `ARBITRARY` witness bytes for custom schemes, ETH-funded gas sponsorship via the canonical paymaster, and non-canonical sponsors that fit the one-pending-tx cap.
+Nodes may directly evaluate a validation prefix when every frame uses protocol-defined default code, expiry-verifier code, or canonical-paymaster code (PR #12001). The shortcut must produce exactly the same dependencies, gas use, and `MAX_VERIFY_GAS` result as EVM simulation; mixed or custom prefixes still require tracing.
+
+What this enables: default-code secp256k1 EOAs, smart accounts with bounded validation, protocol-validated outer signatures (`SECP256K1` and canonical low-`s` `P256`), 100-gas `ARBITRARY` witness entries for custom schemes, ETH-funded gas sponsorship via the canonical paymaster, and non-canonical sponsors that fit the one-pending-tx cap.
 
 ### ERC-20 gas repayment {#erc20-paymaster-patterns}
 
@@ -148,7 +150,11 @@ Nodes that cannot validate frame transactions cannot maintain healthy mempools, 
 
 ### Canonical Paymaster Adoption
 
-The restrictive tier relies on a canonical paymaster recognized by runtime code match. Non-canonical paymasters are limited to 1 pending tx each and lose FOCIL enforcement. ERC-4337 paymaster diversity suggests adoption is market-driven; the expansive tier is the opt-in long-term answer.
+The restrictive tier relies on a canonical paymaster recognized by runtime code match. Non-canonical paymasters are limited to 1 pending tx each and lose FOCIL enforcement. Draft PR #12012 would pin the implementation, storage layout, signer index, delayed rotation and withdrawals, and per-fork code hash. ERC-4337 paymaster diversity suggests adoption is market-driven; the expansive tier is the opt-in long-term answer.
+
+### Replacement and Payer Exposure
+
+Open PR #12007 proposes `(sender, nonce)` as the replacement identity, fee-bump rules, per-payer exposure reservations, payer revalidation, and a deterministic eviction order. These are policy rules rather than consensus changes, but they determine whether one sponsor can safely underwrite many senders without unbounded local escrow exposure.
 
 ### Encrypted Mempool Compatibility
 
