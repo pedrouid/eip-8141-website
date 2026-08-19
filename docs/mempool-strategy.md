@@ -25,7 +25,7 @@ A frame transaction that misses the mempool rules is still **consensus-valid on-
 
 | Tier | What it carries | Validation cost | Status |
 |---|---|---|---|
-| **Restrictive** | Status-quo accounts, protocol-validated outer signatures, canonical paymaster, non-canonical (1 pending tx) | Bounded: 4 prefix shapes, 100k gas including intrinsic signature validation, banned opcodes, sender-only reads | **Specified in EIP-8141** |
+| **Restrictive** | Status-quo accounts, protocol-validated outer signatures, canonical paymaster, non-canonical (1 pending tx) | Bounded: 4 prefix shapes, 100k execution gas, 500k state gas, banned environmental opcodes, sender-only reads | **Specified in EIP-8141** |
 | **Expansive** | Privacy protocols, multi-paymaster, arbitrary VERIFY policies | Higher: ERC-7562 staking/reputation, full simulation | **Proposed**, opt-in per node |
 
 ---
@@ -39,11 +39,11 @@ The restrictive tier covers a small surface:
 - **Account deployment**: deploy frame as the first frame, targeting any factory whose execution satisfies the deploy-frame trace rules. EIP-7997 is the canonical-but-non-mandatory factory after PR #11567 (merged Apr 30) dropped it from `requires` and rewrote the rule as a stateless-trace policy.
 - **Non-canonical paymaster**: bounded to 1 pending tx per paymaster
 
-Validation constraints: one of four prefix shapes, validation-prefix gas plus intrinsic signature-validation cost no more than 100k, banned opcodes (ORIGIN, TIMESTAMP, BLOCKHASH, BALANCE, SSTORE, etc.), storage reads only on `tx.sender`, no calls to non-existent contracts, matching approval-scope flags, and no VERIFY frame after the validation prefix. Consensus rules now forbid VERIFY inside an atomic batch (PRs #11955 and #11987), and simulation may stop only after the payer-setting frame completes successfully. `CREATE`, `CREATE2`, and `SETDELEGATE` (EIP-7819) are banned outside the first deploy frame and allowed inside it for installing code at `tx.sender` (PR #11567); `SSTORE`s on `tx.sender`'s storage are also allowed inside the deploy frame.
+Validation constraints: one of four prefix shapes, execution budgets plus intrinsic signature-validation cost no more than 100k, state budgets no more than 500k, banned environmental opcodes, storage reads only on `tx.sender`, no calls to non-existent contracts, matching approval-scope flags, and no VERIFY frame after the validation prefix. `SLOTNUM` is banned after PR #12066 because it changes between simulation and inclusion. PR #12167 permits `ORIGIN`, `TLOAD`, `TSTORE`, and `BLOBHASH` because their results are frame- or transaction-determined, and aligns the deploy carve-out so `SSTORE` may initialize `tx.sender` storage. Consensus rules forbid VERIFY or approval scope inside an atomic batch (PRs #11955, #11987, and #12109).
 
 **Expiry-verifier frames** (PR #11662, merged May 14; tightened by #11814 on Jul 7) are admitted as a special case: a `VERIFY` frame targeting `EXPIRY_VERIFIER = address(0x8141)` carries an 8-byte unix-seconds deadline as `frame.data` and may appear only as the first frame for public propagation. Its protocol-defined behavior avoids EVM trace and storage-dependency checks, but its gas still counts toward `MAX_VERIFY_GAS`. The `TIMESTAMP` opcode is permitted only for the canonical runtime code at this address. Public-mempool nodes MUST drop transactions whose expiry is in the past relative to their current view of `block.timestamp`. Validation-prefix shape matching treats expiry-verifier frames as transparent (`[expiry_verify, self_verify]` matches `[self_verify]`).
 
-Nodes may directly evaluate a validation prefix when every frame uses protocol-defined default code, expiry-verifier code, or canonical-paymaster code (PR #12001). The shortcut must produce exactly the same dependencies, gas use, and `MAX_VERIFY_GAS` result as EVM simulation; mixed or custom prefixes still require tracing.
+Nodes may directly evaluate a validation prefix when every frame uses protocol-defined default code, expiry-verifier code, or canonical-paymaster code (PR #12001). The shortcut must produce exactly the same dependencies, execution/state-gas use, and cap results as EVM simulation; mixed or custom prefixes still require tracing.
 
 What this enables: default-code secp256k1 EOAs, smart accounts with bounded validation, protocol-validated outer signatures (`SECP256K1` and canonical low-`s` `P256`), 100-gas `ARBITRARY` witness entries for custom schemes, ETH-funded gas sponsorship via the canonical paymaster, and non-canonical sponsors that fit the one-pending-tx cap.
 
@@ -66,7 +66,7 @@ What this enables: default-code secp256k1 EOAs, smart accounts with bounded vali
 
 Example 5 in the spec ([EOA Paying Gas in ERC-20s](/current-spec#5-eoa-paying-gas-in-erc-20s)) is now the public sponsor shape: it checks signature metadata and the next ERC-20 transfer frame, not the user's token balance.
 
-The trustless balance-checking restriction is deliberate. The restrictive tier forbids external storage reads during validation to preserve VOPS compatibility: a partial-stateless node cannot validate inclusion that depends on state outside its slice. The public workaround is economic: the sponsor prices balance-drain risk. Future public paths could use **AMM paymaster contracts**, **ERC-7562-style validation rules** for narrow shared-state reads, or **guarantor payers** ([PR #11555](https://github.com/ethereum/EIPs/pull/11555)) that let nodes skip sender simulation. These are open, not specified.
+The trustless balance-checking restriction is deliberate. The restrictive tier forbids external storage reads during validation to preserve VOPS compatibility: a partial-stateless node cannot validate inclusion that depends on state outside its slice. The public workaround is economic: the sponsor prices balance-drain risk. Future public paths could use **AMM paymaster contracts**, **ERC-7562-style validation rules** for narrow shared-state reads, or a reworked guarantor design that lets nodes skip sender simulation. The original guarantor PR #11555 closed as stale on Aug 14 and is not specified.
 
 ---
 
@@ -150,11 +150,15 @@ Nodes that cannot validate frame transactions cannot maintain healthy mempools, 
 
 ### Canonical Paymaster Adoption
 
-The restrictive tier relies on a canonical paymaster recognized by runtime code match. Non-canonical paymasters are limited to 1 pending tx each and lose FOCIL enforcement. Draft PR #12012 would pin the implementation, storage layout, signer index, delayed rotation and withdrawals, and per-fork code hash. ERC-4337 paymaster diversity suggests adoption is market-driven; the expansive tier is the opt-in long-term answer.
+The restrictive tier relies on a canonical paymaster recognized by runtime code match. Non-canonical paymasters are limited to 1 pending tx each and lose FOCIL enforcement. Open PR #12041 replaces the closed Solidity draft #12012 with assembled reference bytecode, storage layout, delayed rotation and withdrawals, and a pinned code hash. ERC-4337 paymaster diversity suggests adoption is market-driven; the expansive tier is the opt-in long-term answer.
 
 ### Replacement and Payer Exposure
 
-Open PR #12007 proposes `(sender, nonce)` as the replacement identity, fee-bump rules, per-payer exposure reservations, payer revalidation, and a deterministic eviction order. These are policy rules rather than consensus changes, but they determine whether one sponsor can safely underwrite many senders without unbounded local escrow exposure.
+PR #12007 merged Jul 28. Pending alternatives share `(sender, nonce)` identity; replacements independently pass admission and increase both execution-fee fields, with blob-specific rules when applicable. Reservations move atomically if the payer changes, every payer's aggregate maximum-cost exposure is balance-bounded, and eviction prioritizes invalid transactions, then nearest expiry, then lowest effective priority fee.
+
+### FOCIL Validity Profiles
+
+Open EIP-8369 (PR #12110) separates mempool admission from inclusion-list eligibility. Profile 1 checks ordinary validity at end of payload. Profile 2 replays a bounded validation prefix at a builder-claimed position with its own storage rules. ethrex review established that a transaction may pass one check and fail the other; claimed-index encoding and Engine API transport remain activation prerequisites. EIP-8361 (PR #12075) separately proposes mempool-layer STARK proofs of validation-prefix validity, without changing consensus.
 
 ### Encrypted Mempool Compatibility
 

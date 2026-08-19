@@ -26,10 +26,10 @@ Three terms do most of the heavy lifting here. Plain-English versions first, lin
 
 | Topic | Status |
 |---|---|
-| Validation state requirements | Bounded: [restrictive tier](/mempool-strategy#restrictive-mempool-what-ships-first) caps at 100k gas, sender-only storage reads |
+| Validation state requirements | Bounded: [restrictive tier](/mempool-strategy#restrictive-mempool-what-ships-first) caps at 100k execution gas and 500k declared state gas, with sender-only storage reads |
 | Bytecode availability | Proposed: [VOPS+4 extension](/mempool-strategy#the-state-side-vops-4-slots) includes code |
 | State growth at AA scale | Proposed: ~72 GB under VOPS+4; extra-VOPS reads pay [merkle branch cost](/mempool-strategy#the-merkle-branch-escape-hatch) |
-| Frames + FOCIL + VOPS trilemma | Proposed: [two-tier mempool + VOPS+4 + witness escape hatch](/mempool-strategy#resolving-the-trilemma) |
+| Frames + FOCIL + VOPS trilemma | Proposed: [two-tier mempool + VOPS+4 + witness escape hatch](/mempool-strategy#resolving-the-trilemma); open EIP-8369 adds explicit FOCIL profiles |
 | Witness-based FOCIL | Proposed: 4-8 kB today, 1-2 kB after binary tree migration |
 | Privacy pool state reads | Partial: EIP-8272 makes declared recent roots pre-validated and introspectable, but nullifier slots remain hash-keyed in external pool storage outside VOPS+4. Routed via [canonical-pool exemption + validation-index FOCIL](/mempool-strategy#privacy-pools-three-gates) |
 | Implementation complexity | Open: compounds with other protocol changes |
@@ -40,9 +40,11 @@ Three terms do most of the heavy lifting here. Plain-English versions first, lin
 
 Legacy transactions require a single account trie lookup. Frame transactions execute arbitrary sender code via VERIFY, requiring bytecode, storage slots, and helper library code up to the 100,000-gas validation cap. Most nodes in a post-ZKEVM stateless world cannot validate these without carrying more state than the VOPS baseline provides.
 
-The [restrictive mempool tier](/mempool-strategy#restrictive-mempool-what-ships-first) bounds this: validation is limited to `tx.sender` storage, capped at 100,000 gas, with banned opcodes preventing reads outside the sender's state. The [VOPS+4 extension](/mempool-strategy#the-state-side-vops-4-slots) (nonce, balance, code, first 4 storage slots per account) covers well-designed AA wallets within a small constant-factor increase over the VOPS baseline.
+The [restrictive mempool tier](/mempool-strategy#restrictive-mempool-what-ships-first) bounds this: validation is limited to `tx.sender` storage, capped at 100,000 execution gas plus 500,000 declared state gas, with banned opcodes preventing environmental or third-party mutable-state dependencies. The state cap bounds admitted growth; it does not measure simulation work. The [VOPS+4 extension](/mempool-strategy#the-state-side-vops-4-slots) (nonce, balance, code, first 4 storage slots per account) covers well-designed AA wallets within a small constant-factor increase over the VOPS baseline.
 
-PR #12001 adds a client optimization for fully protocol-defined prefixes: nodes may evaluate default code, the expiry verifier, and the canonical paymaster directly instead of tracing EVM execution. Direct evaluation must preserve the exact dependency set, gas use, and `MAX_VERIFY_GAS` result. It reduces implementation work for common paths but does not change the VOPS boundary; any custom VERIFY code still needs the same bytecode and state slice.
+PR #12001 adds a client optimization for fully protocol-defined prefixes: nodes may evaluate default code, the expiry verifier, and the canonical paymaster directly instead of tracing EVM execution. Direct evaluation must preserve the exact dependency set and both gas-cap results. Open PR #12160 would enumerate that dependency set for targeted revalidation. The shortcut reduces implementation work for common paths but does not change the VOPS boundary; any custom VERIFY code still needs the same bytecode and state slice.
+
+PR #12062 makes state growth a first-class transaction dimension. Every frame declares isolated execution and state budgets, and block builders reserve both dimensions exactly. This improves resource accounting but does not make validation state available to a partial-state node: a 500,000 state-gas allowance still needs the underlying account and slot witnesses.
 
 ## State Growth at Scale
 
@@ -54,11 +56,11 @@ derekchiang proposed (ethresear.ch [post #12](https://ethresear.ch/t/frame-trans
 
 A recurring observation from the [ethresear.ch thread](https://ethresear.ch/t/frame-transactions-through-a-statelessness-lens/24538): current designs cannot simultaneously deliver Frames/Native AA, Public Mempool/FOCIL, and Statelessness/VOPS. You can have at most two.
 
-The EIP-8141 co-authors argue all three are achievable per-transaction-class. The restrictive mempool constrains validation to bounded state access. VOPS extends to nonce, balance, code, and 4 slots. Extra-VOPS use cases include merkle branches. Complex policies move to the [expansive tier](/mempool-strategy#expansive-mempool-what-develops-in-parallel). The full resolution framework is in [Mempool Strategy](/mempool-strategy#resolving-the-trilemma).
+The EIP-8141 co-authors argue all three are achievable per-transaction-class. The restrictive mempool constrains validation to bounded state access. VOPS extends to nonce, balance, code, and 4 slots. Extra-VOPS use cases include merkle branches. Complex policies move to the [expansive tier](/mempool-strategy#expansive-mempool-what-develops-in-parallel). Open EIP-8369 (PR #12110) adds two FOCIL profiles: ordinary end-of-payload validity and bounded replay at a builder-claimed index. ethrex review clarified that mempool admission and FOCIL eligibility apply different storage rules, and the claimed-index transport is not yet specified. The full resolution framework is in [Mempool Strategy](/mempool-strategy#resolving-the-trilemma).
 
 ## Witness Costs for Extra-VOPS Reads
 
-For storage slots outside the VOPS+4 extension, transactions include a witness proving the state items they read. Simple cases (alternative sig algorithms, key rotation) add zero extra cost since their validation reads fit within VOPS+4. EIP-8272 avoids mutable-storage reads for declared recent application roots by moving them into a pre-validated transaction field, with `RECENTROOTREFLOAD (0xb5)` for validation-time access. Privacy protocol withdrawals still need nullifier state from external storage and add ~4 kB per proven item under the witness approach.
+For storage slots outside the VOPS+4 extension, transactions include a witness proving the state items they read. Simple cases (alternative sig algorithms, key rotation) add zero extra cost since their validation reads fit within VOPS+4. EIP-8272 avoids mutable-storage reads for declared recent application roots by moving them into a pre-validated transaction field. Its `RECENTROOTREFLOAD (0xb5)` currently collides with EIP-8141's newly merged `SIGDATACOPY (0xb5)`, so that opcode assignment is not implementation-safe until one draft moves. Privacy protocol withdrawals still need nullifier state from external storage and add ~4 kB per proven item under the witness approach.
 
 The infrastructure already exists in clients (witness machinery is needed for sync), and binary tree migration further reduces the per-item cost. The framework accepts this as the explicit per-transaction cost of the escape hatch, limited to transactions that need it.
 

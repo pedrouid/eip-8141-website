@@ -22,7 +22,7 @@ No. It is a draft EIP under active development targeting a future hard fork. [Tr
 
 **1.5. What new opcodes does it introduce?**
 
-Six: `APPROVE`, `TXPARAM`, `FRAMEDATALOAD`, `FRAMEDATACOPY`, `FRAMEPARAM`, and `SIGPARAM` (signature metadata and custom witness bytes). [Details →](/current-spec#transaction-structure)
+Seven: `APPROVE`, `TXPARAM`, `FRAMEDATALOAD`, `FRAMEDATACOPY`, `FRAMEPARAM`, `SIGPARAM`, and `SIGDATACOPY`. The last opcode's `0xb5` assignment currently conflicts with EIP-8272. [Details →](/current-spec#transaction-structure)
 
 ---
 
@@ -140,11 +140,11 @@ Yes, via account code. Default code covers only secp256k1 at signature index 0 o
 
 **5.8. How do custom verifiers get signature bytes without circular hashes?**
 
-They put witness bytes in a 100-gas `ARBITRARY` signature entry. `SIGPARAM` exposes the bytes, and empty-`msg` entries elide them from the canonical hash so the witness does not commit to itself.
+They put witness bytes in a 100-gas `ARBITRARY` entry. `SIGPARAM` exposes its length, `SIGDATACOPY` copies the bytes, and empty-`msg` entries elide the bytes from the canonical hash.
 
 **5.9. Is there a standard for existing modular smart accounts to use frame transactions?**
 
-Yes. ERC-8286 (draft, `requires: 7579, 8141`) standardizes how ERC-7579 modular accounts implement the frame validation flow: a validator module returns an approval mode the account applies via `APPROVE` in a VERIFY frame. See [Developer Tooling](/developer-tooling#where-fragmentation-risk-still-lives).
+Yes. ERC-8286 (`requires: 7579, 8141`) merged Jul 28 and standardizes how an ERC-7579 validator returns the approval mode applied through `APPROVE` in a VERIFY frame. See [Developer Tooling](/developer-tooling#where-fragmentation-risk-still-lives).
 
 **5.10. Must wallets normalize P256 signatures?**
 
@@ -156,7 +156,7 @@ Yes. EIP-8141 requires canonical low-`s` P256 even though `P256VERIFY` accepts h
 
 **6.1. Is EIP-8141 post-quantum safe?**
 
-The transaction format itself has no ECDSA dependency. Accounts choose their own signature scheme in VERIFY frames, and custom witness bytes can live in `ARBITRARY` signature entries exposed by `SIGPARAM`. Any PQ algorithm can be used by account code without changing the frame transaction envelope.
+The transaction format itself has no ECDSA dependency. Accounts choose their own signature scheme in VERIFY frames, and custom witness bytes can live in `ARBITRARY` entries read through `SIGPARAM`/`SIGDATACOPY`. Any PQ algorithm can be used by account code without changing the envelope.
 
 **6.2. How does this compare to other proposals?**
 
@@ -189,6 +189,10 @@ Yes. PR #11662 (merged May 14) added an expiry-verifier frame: a `VERIFY` frame 
 **7.6. What's the difference between EXPIRY_VERIFIER and EIP-8266 expiring nonces?**
 
 `EXPIRY_VERIFIER` (PR #11662, merged May 14) expires a single transaction: past the deadline, that specific transaction becomes invalid. EIP-8266 (PR #11692, merged May 22) expires a nonce slot: past the deadline, the keyed-nonce sequence as a whole ages out. They are complementary primitives.
+
+**7.7. What are the public validation gas caps?**
+
+The validation prefix is capped at 100,000 execution gas including protocol signature checks and 500,000 declared state gas. State gas bounds admitted growth, not simulation work.
 
 ---
 
@@ -263,19 +267,23 @@ It remains Considered for Inclusion (CFI), not Proposed for Inclusion (PFI). ACD
 
 **10.4. How are frame and signature bytes charged?**
 
-They contribute to `standard_gas_limit` and the EIP-7623 `calldata_floor_gas`; `max_gas` reserves the larger amount. Final `gas_used` applies the EIP-3529 refund, then enforces the floor.
+They contribute to intrinsic execution gas and the EIP-7623 calldata floor. Final usage floors the execution dimension, then adds net state gas; `max_gas` also reserves every declared state budget.
 
 **10.5. What do frame receipt status values mean?**
 
-`0x0` means failure, `0x1` success, and `0x2` skipped after an atomic-batch failure. Per-frame gas is gross before the transaction refund and may not sum to final transaction `gas_used`.
+`0x0` means failure, `0x1` success, and `0x2` skipped after an atomic-batch failure. Each frame reports `[execution, state]` gas; the receipt has no transaction-level status.
 
 **10.6. Did the sibling EIPs collide with EIP-8141's introspection assignments?**
 
-Yes, and the July fixes resolved them: EIP-8250 starts nonce-key selectors at `0x10` (#11966), while EIP-8272 uses count selector `0x0f` (#11930) and `RECENTROOTREFLOAD (0xb5)` (#11967).
+Yes. The July selector collisions were fixed, but a new unresolved conflict exists: EIP-8141 `SIGDATACOPY` and EIP-8272 `RECENTROOTREFLOAD` both currently claim opcode `0xb5`.
 
 **10.7. How much gas does APPROVE cost?**
 
-`APPROVE` has no base charge and pays only memory expansion, matching `RETURN`; related nonce, payer, and escrow work is covered by intrinsic transaction costs.
+`APPROVE` has no execution-gas base charge and pays only memory expansion. If its nonce increment creates `tx.sender`, the approving frame also needs 183,600 state gas.
+
+**10.8. Can one frame borrow unused gas from another?**
+
+No. Every frame's execution and state pools are isolated, and the two dimensions cannot borrow from each other. Unused budgets are refunded only at settlement.
 
 ---
 

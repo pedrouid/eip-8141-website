@@ -751,142 +751,148 @@ An implementation-driven audit propagated the repaired signatures-list and gas m
 
 **Significance**: This closes the full transaction settlement path across gas limits, refunds, receipts, payer escrow, and blob fees.
 
+## Public-Mempool Lifecycle and Logs — July 28, 2026
+
+*svlachakis — PRs #12007 and #12008, merged July 28, 2026*
+
+- **Replacement**: identifies pending alternatives by `(sender, nonce)` and requires independent validity plus fee bumps.
+- **Payer exposure**: reserves aggregate maximum cost against every payer and moves the reservation atomically when a replacement changes payer.
+- **Eviction**: removes invalid transactions first, then the nearest expiry, then the lowest effective priority fee.
+- **Logs**: defines transaction logs as the concatenation of frame-receipt logs and discards logs unrolled with a failed atomic batch.
+
+**Key review discussion**: AnkushinDaniil and lightclient approved the policy framing. The rules remain public-mempool policy rather than consensus validity, while the log rule removes a cross-client receipt ambiguity.
+
+## Additive Sibling Specifications — July 29, 2026
+
+*soispoke — PRs #11968 and #11970, merged July 29, 2026*
+
+- **EIP-8250**: restates only the nonce-key delta and its added cost terms.
+- **EIP-8272**: restates only the recent-root field and its added cost and activation terms.
+
+**Key review discussion**: authors approved defining siblings as deltas so future base-spec fields and settlement formulas are inherited rather than replaced by stale copies.
+
+## Signature Copy Operand Order — July 30, 2026
+
+*Marchhill — PR #12042, merged July 30, 2026*
+
+- **SIGPARAM**: aligns the dynamic copy operand order with `CALLDATACOPY` and `FRAMEDATACOPY`.
+
+**Key review discussion**: the normative one-line correction merged without disagreement and removed an interpreter-order ambiguity.
+
+## Pinned Sibling System Addresses — August 3, 2026
+
+*AnkushinDaniil — PRs #12067 and #12068, merged August 3, 2026*
+
+- **EIP-8250**: pins `NONCE_MANAGER` to `0x...8250`.
+- **EIP-8272**: pins `RECENT_ROOT_ADDRESS` to `0x...8272`.
+
+**Key review discussion**: both changes replace placeholder identities with deterministic reserved addresses for client implementation.
+
+## Validation Slot Safety and Reference Links — August 11, 2026
+
+*AnkushinDaniil — PRs #12066 and #12121, merged August 11, 2026*
+
+- **Mempool**: bans `SLOTNUM (0x4b)` during validation-prefix execution because the slot may change between simulation and inclusion.
+- **Editorial**: links the first reference to each cited proposal.
+
+**Key review discussion**: EIP-8272's use of slot identity made the environmental dependency concrete; the normative ban merged as a minimal safety correction.
+
+## Explicit Two-Dimensional Frame Gas — August 13, 2026
+
+*lightclient — PR #12062, merged August 13, 2026*
+
+- **Envelope**: replaces each `gas_limit` with `limits = [execution, state]` and groups fee fields under `fees`.
+- **Frame model**: gives every frame isolated execution and state-gas pools that cannot borrow across dimensions or frames.
+- **Limits**: lowers `FRAME_TX_INTRINSIC_COST` to 12,000, applies the EIP-7825 execution cap, and adds `MAX_VERIFY_STATE_GAS = 500,000`.
+- **State accounting**: attributes state growth to the creating frame; later refills reduce that owner's receipt without becoming spendable by another frame.
+- **Receipts and introspection**: records `[execution, state]` per frame and adds state-limit/usage selectors to `TXPARAM` and `FRAMEPARAM`.
+- **Deployment and value**: prices account creation and code deposit as state gas, adds the EIP-2780 value charge, and follows EIP-7708 transfer-log semantics.
+- **Settlement**: floors the execution dimension, adds net state gas, and reserves block execution/state capacity independently under EIP-8037.
+
+**Key review discussion**: jochem-brouwer identified journal-introspection leakage and the risk that untrusted calls could exhaust later state capacity. The final design isolates spendable pools and credits cross-frame refills only to the original frame's receipt. Helkomine questioned whether the EIP-7825 cap should be per frame; the merged text retains a transaction-wide execution cap while keeping budgets per frame.
+
+**Significance**: This is the largest structural change since the April mode/flags rewrite and changes the envelope, execution model, receipts, block accounting, mempool limits, and wallet estimation surface.
+
+## Receipt and Gas Clarifications — August 14, 2026
+
+*AnkushinDaniil — PRs #12026 and #12061, merged August 14, 2026*
+
+- **Signature validation**: protocol signature checks do not add the ECDSA or P256 precompiles to the block access list.
+- **Receipts**: the payload has per-frame statuses only; interfaces derive any transaction-level status.
+
+**Key review discussion**: both corrections came from client-implementation ambiguity and merged after the state-gas rewrite absorbed the earlier floor/value wording.
+
+## Approval-Free Atomic Batches — August 14, 2026
+
+*Marchhill — PR #12109, merged August 14, 2026*
+
+- **Frame model**: every frame belonging to an atomic batch, including the unflagged terminating frame, must have approval-scope bits set to zero.
+- **APPROVE**: cannot execute inside a batch because its required scope is absent.
+- **Security**: batch rollback can no longer reverse nonce collection, payer escrow, or `sender_approved` and convert an ordinary failure into late invalidity.
+
+**Key review discussion**: AnkushinDaniil argued that rollback-based handling made validity depend on executing most of a private transaction and left two possible payers for refund language. Marchhill replaced that design with the static full-scope ban; lightclient approved the result.
+
+**Significance**: This changes both static frame validity and approval semantics to close a rollback-sensitive consensus path.
+
+## Initial Warm Access Set — August 17, 2026
+
+*Marchhill — PR #12113, merged August 17, 2026*
+
+- **Access accounting**: initializes sender, coinbase, and active precompiles as warm and storage keys as empty.
+- **Frame targets**: being a target does not itself warm an address.
+- **Payer**: warms when `APPROVE` touches it; `ENTRY_POINT` remains cold unless otherwise accessed.
+
+**Key review discussion**: AnkushinDaniil found overlap ambiguity for sender/coinbase/precompile targets and a payer divergence in sponsored post-op flows. The final wording pins all cases; lightclient approved it.
+
+**Significance**: A one-line rule fixes consensus-visible gas divergence across every client implementation.
+
+## Static Signature Data Copy — August 18, 2026
+
+*lightclient — PR #12187, merged August 18, 2026*
+
+- **Opcode set**: adds `SIGDATACOPY (0xb5)` for copying `ARBITRARY` witness bytes.
+- **SIGPARAM**: now has a static two-item input and exposes metadata plus arbitrary-witness length only.
+- **Sibling interaction**: the assigned byte collides with EIP-8272's current `RECENTROOTREFLOAD (0xb5)` assignment.
+
+**Key review discussion**: the change responds to repeated implementation concern about dynamic stack arity. It merged without a recorded review objection, but the sibling collision remains unresolved as of August 20.
+
+**Significance**: This adds a seventh EIP-8141 opcode and changes the contract interface used by every custom signature verifier.
+
+## Deterministic Validation Opcodes — August 18, 2026
+
+*Marchhill — PR #12167, merged August 18, 2026*
+
+- **Mempool**: removes `ORIGIN`, `TLOAD`, `TSTORE`, and `BLOBHASH` from the banned list because their values are determined by the frame or signed payload.
+- **Deployment**: permits `SSTORE` to `tx.sender` storage inside the first deploy frame, matching the existing trace-rule carve-out.
+- **Security**: leaves environmental and third-party mutable-state dependencies banned.
+
+**Key review discussion**: AnkushinDaniil and lightclient approved aligning the opcode list with the stated dependency model. Marchhill separately flagged a direct-evaluation dependency-set inconsistency, now tracked in open PR #12160.
+
+**Significance**: This changes both deploy-frame capabilities and public-mempool validation policy while narrowing the ban to actual inclusion-time dependencies.
+
 ## Active/Open PRs
 
-*As of July 28, 2026.* These PRs represent active design proposals that may change the spec in the near future.
+*As of August 20, 2026.*
 
-### PR #11482: Allow using precompiles for VERIFY frames (draft since Apr 2)
+### Base EIP-8141
 
-**Author**: derekchiang
+- **[#12041](https://github.com/ethereum/EIPs/pull/12041), canonical paymaster bytecode** (Marchhill): assembled reference runtime, storage layout, timelocked admin operations, and pinned code hash; awaiting author review.
+- **[#12157](https://github.com/ethereum/EIPs/pull/12157), precompile frame dispatch** (Marchhill): clarifies routing, value charges, and why a precompile-targeted VERIFY frame cannot approve.
+- **[#12160](https://github.com/ethereum/EIPs/pull/12160), validation dependency set** (AnkushinDaniil): enumerates what clients index for targeted revalidation; lightclient questions whether this belongs in the EIP.
+- **[#12162](https://github.com/ethereum/EIPs/pull/12162), validation-stable concurrency** (AnkushinDaniil): relaxes the sender cap for a narrow stable class; review warns against privileging protocol-nonce accounts.
+- **[#12198](https://github.com/ethereum/EIPs/pull/12198), expiry as a frame mode** (nerolation): replaces the special-target VERIFY shape with a fourth mode and updates EIP-8266/EIP-8272.
+- **[#12203](https://github.com/ethereum/EIPs/pull/12203), expiry-verifier nonce** (Marchhill): states that activation installs code without changing the existing nonce.
 
-- **Why**: Allow both EOAs and contract accounts to use precompiles for verification, enabling key rotation and shared verification logic.
-- **Proposed change**: Designate "signature precompiles" that VERIFY frames can target natively. The precompile reads the public key commitment from storage.
-- **Status**: Draft and merge-conflicted, with no activity since Apr 4. Earlier reviewer approvals do not make the current branch mergeable.
+### Sibling and Related EIPs
 
-From derekchiang's PR description:
-
-> This will allow a contract account to use precompiles for verification, while still having code that serves other purpose (e.g. for execution). As a side benefit, this also enables key rotation, since the precompile reads the public key commitment from storage.
-
-### PR #11555: Add support for guarantors (draft since Apr 22)
-
-**Author**: derekchiang
-
-- **Why**: Provides a public-mempool path for transactions whose sender VERIFY logic reads shared state (ERC-20 balances, environmental opcodes), which otherwise violates the restrictive tier's `storage reads only on tx.sender` rule.
-- **Proposed change**: Introduce a "guarantor" payer that pays for the transaction *even if sender validation fails*. When a guarantor is present, mempool nodes may skip sender-validation simulation entirely and propagate the transaction on the strength of the guarantor's signature alone.
-- **Consequence**: a transaction with a guarantor can use any sender validation logic (including shared-state reads and environmental opcodes) and still propagate through the public mempool. This could open a stricter public path for trustless ERC-20 balance-checking sponsors beyond today's risk-accepting non-canonical sponsor shape.
-- **Status**: Draft and merge-conflicted, with no activity since Apr 28.
-
-From derekchiang's PR description:
-
-> The idea is to introduce the concept of a "guarantor," which is a payer that pays for the transaction *even if sender validation fails*. As long as a transaction has a guarantor, mempool nodes do not need to check if the sender validation succeeds, and can skip simulation for sender validation altogether. As a result, transactions with a guarantor can use any sender validation logic, including access to shared state, environmental opcodes, etc., and still safely pass through the public mempool.
-
-### PR #11580: Allow payer to approve before sender (open as draft since Apr 29)
-
-**Author**: lightclient
-
-- **Why**: An alternative to derekchiang's guarantors PR (#11555). Instead of introducing a new "guarantor" role with its own approval semantics, lightclient proposes simply relaxing the ordering rule so a payer can call `APPROVE_PAYMENT` before the sender approves execution. A payer that commits to paying gas before sender validation runs absorbs the same economic risk a guarantor would, without a new role in the spec.
-- **History**: same content was briefly auto-merged as #11575 on Apr 28 and reverted by #11579 on Apr 29 (lightclient intended it as a draft). Reopened as draft #11580 the same day.
-- **Status**: draft; the choice between this and #11555 (guarantors) is the open question for the next sync.
-- **Branch state**: Merge-conflicted and unchanged since May 15.
-
-From lightclient's PR description (carried over from #11575):
-
-> Alternative to #11555. I think it is simpler to just allow the payer to approve before the sender instead of adding the full guarantor role.
-
-### PR #11681: Extend with Guarantors, Flexible Nonces, and Signer Binding (open since May 16)
-
-**Author**: pedrouid (Pedro Gomes)
-
-- **Why**: Replaces the closed PR #11643 (Extended Feature Set, May 11 – May 18) after PR #11662 landed EXPIRY_VERIFIER on May 14. With protocol-level expiry now shipped as a verifier-frame contract, the envelope-expiry field in #11643 became redundant. PR #11681 drops the `expiry` envelope field and retains the three remaining features: guarantors, keyed nonces, and signer binding, packaged as a single EIP-8141 amendment rather than a requires-chain of sibling EIPs.
-- **Proposed change** (+810/-74, 3 files):
-  - **Guarantors**: adopts PR #11555 verbatim. New approval scope `APPROVE_GUARANTEE = 0x4`, a `compute_frame_sig_hash` helper, a `guarantor_approved` transaction-scoped flag, and a canonical-paymaster guarantor mode with a `bumpNonce` entry point. The mempool tier that today drops shared-state-reading sender validation can admit those transactions when a guarantor signature carries the risk.
-  - **Keyed Nonces**: mirrors EIP-8250 semantics with one shape change, a single `uint64 signer` envelope field instead of `(nonce_key, nonce_seq)`, so the same identifier indexes both the keyed nonce stream and the registered pubkey. `signer == 0` aliases the legacy account nonce. The position taken in the PR description is that keyed nonces belong inside EIP-8141 rather than as a sibling EIP, because the upgrade path is more efficient when guarantors, keyed nonces, and signer binding ship together and share one system contract.
-  - **Signer Binding**: a transaction-scoped `verified_signers` table populated by non-secp256k1 `VERIFY` frames that prove `(digest, address)` against a registered pubkey. `ECRECOVER` consults the table on the hit path; the miss path is byte-identical to upstream, so unrelated contracts behave the same.
-  - **Envelope changes**: one new outer field, `signer` (uint64). No `expiry` field; protocol-level expiry is delegated to PR #11662's `EXPIRY_VERIFIER` frame.
-  - **System contract**: one `AUTH_MANAGER` at a reserved address (EIP-4788 / EIP-2935 pattern), holding both keyed nonce streams and registered pubkey signers under one storage layout.
-  - **Surface area kept small**: zero new opcodes, zero new precompiles, zero account-RLP changes.
-- **Relationship to EIP-8250**: if PR #11681 lands, it supersedes EIP-8250 by absorption. The PR description argues explicitly against the requires-chain layering EIP-8250 introduced, on the grounds that a bundled upgrade is more efficient than three sibling EIPs with overlapping system contracts. This is the open architectural question on the table: compose-by-requires (EIP-8250's pattern) vs absorb-into-base (PR #11681's pattern).
-- **Status**: Open since May 16, with no activity since May 18 (only bot comments). As of June 15 the PR has passed the one-month-idle mark with no reviewer signoffs, while the compose-by-requires sibling stack grew to four EIPs over the same window. CI initially flagged commit-graph errors which were addressed in subsequent commits. Bot reports 1 more reviewer needed. Sits alongside #11555 (guarantors) as the active packaging question; #11555 may fold into #11681 if the absorption framing converges.
-- **July 25 review**: AnkushinDaniil argued that coupling the nonce channel to a registered signer is less flexible than EIP-8250's arbitrary keys and suggested splitting or rebasing the bundle.
-
-From pedrouid's PR description:
-
-> Guarantors: a payer primitive that admits a transaction to the public mempool even when the sender's `VERIFY` frame is unsafe to simulate. Adopts PR #11555 verbatim. Keyed Nonces: independent replay-protection sequences per `(sender, signer)`. Mirrors EIP-8250 semantics. Diverges only in shape: one `uint64 signer` envelope field instead of `(nonce_key, nonce_seq)`. Signer Binding: tx-scoped `verified_signers` table populated by non-secp256k1 `VERIFY` frames.
-
-### ERC PR #1794: Add ERC-8286 — Modular Accounts for Frame Transactions (open since June 3)
-
-**Author**: chiranjeev13 (node.cm)
-
-- **Why**: Defines how [ERC-7579](https://eips.ethereum.org/EIPS/eip-7579) modular smart accounts implement the EIP-8141 frame-transaction validation flow. ERC-7579 stays the core module system (validator, executor, hook, config modules); ERC-8286 adds the validation path for frame transactions. First application-layer standard built on EIP-8141 and the first frame-transaction proposal tracked in the ERCs repo rather than EIPs. The file's `requires: 7579, 8141` header makes it the only ERC to date that takes EIP-8141 as a hard dependency (ERC-8211 Smart Batching, PR #1638, only mentions EIP-8141 as a forward-compatibility transport, without requiring it).
-- **Proposed change** (+425 lines, new file `ERCS/erc-8286.md`): a validator module returns an approval mode that the account applies via the `APPROVE` instruction during a VERIFY frame, mapping ERC-7579's module interfaces onto EIP-8141's validation semantics. Targets the permissions and session-key layer that EIP-8141 protocol defaults deliberately leave open.
-- **Status**: Draft; requires one more Editor review (g11tech, jochem-brouwer, samwilsn, xinbenlv) and CI flagged commit errors. EthMagicians thread at [topic 28695](https://ethereum-magicians.org/t/erc-8286-modular-accounts-for-frame-transactions/28695) (1 post, the June 3 announcement, no discussion yet).
-
-### PR #11772: Add EIP-8288 — Frame type for PQ sig and STARK aggregation (open since June 5)
-
-**Authors**: vbuterin (Vitalik Buterin), Thomas Coratger
-
-- **Why**: Post-quantum signature schemes (lattice-based, hash-based) cost ~150-200k gas each to verify and weigh 2-3 kB on the wire. STARK proofs are even worse (128-512 kB on-wire, millions of gas to verify). Including these directly per transaction makes privacy protocols impractical and incompatible with FOCIL and Frame Transactions. EIP-8288 lets transactions declare lightweight `(scheme, data_hash, verification_key)` dependencies that get aggregated off-chain into a single recursive STARK at the block level.
-- **Proposed change**: New sibling EIP (`eip-8288.md`, +508 lines) requiring `2718, 2929, 2930, 7702, 8141`. Three moving pieces:
-  - **New frame mode `DEP_VERIFY_FRAME_MODE = 3`**: declares a set of dependencies as `(scheme, data_hash, verification_key)` triples (96 bytes each, up to `MAX_DEPENDENCIES_PER_FRAME = 256`). These are not executed as EVM code; they are recorded for the block-level recursive proof. The schemes are `LEANSPHINCS_SCHEME = 0x10` and `LEANSTARK_SCHEME = 0x11` (Lean Ethereum hash-based signatures and STARK proofs respectively, with gas constants `3000` and `30000`).
-  - **Block-header field `recursive_stark`**: new top-level header entry `[stark_proof, block_deps_hash]`. Block validity requires the single recursive STARK proves all declared dependencies; `block_deps_hash` commits to the concatenation of all dependency triples. `AGGREGATED_VK` is the fixed verifying key for the recursive scheme.
-  - **EVM introspection**: dependencies are intended to be visible during execution via EIP-8141 frame introspection (`FRAMEPARAM` plus frame-data access). The draft text still needs reconciliation with the latest base opcode surface, where `SIGPARAM` now occupies `0xb4`. Per-tx caps: `MAX_SIGS_PER_TX = 16`, `MAX_STARKS_PER_TX = 1`.
-- **Mempool wrapper**: introduces a wrapper format that bundles transactions with their dependencies and witnesses, with recursive aggregation supported at the mempool layer so nodes can combine proofs to reduce gossip bandwidth. Explicitly compatible with FOCIL (EIP-7805).
-- **Significance**: fourth compose-by-requires sibling EIP after EIP-8250, EIP-8266, EIP-8272. First sibling to add a new frame mode (a structural extension to EIP-8141's mode enum, not just an opcode or system contract), and first to introduce a new top-level block-header field. Authored by Vitalik Buterin directly and Thomas Coratger (new contributor), bringing the sibling-author roster beyond the soispoke/nerolation/lightclient cluster. Strategically, the design positions Frame Transactions as the protocol-layer carrier for Ethereum's post-quantum signature transition and for STARK-based privacy/L2 settlement, both load-bearing for the next-major-fork roadmap.
-- **Status**: Open since June 5. The file is now committed as `eip-8288.md` (the `eip-9999.md` placeholder was renamed). abcoathup left clarifying comments through June 15, derekchiang reviewed June 22, and EIP editor jochem-brouwer requested editorial changes June 30 ("Exciting EIP"). The review then shifted from editorial cleanup to proof security: b-wagn raised a recursive-proof knowledge-soundness concern July 3 and suggested a depth counter/public-input fix; soispoke and mmjahanara continued clarifying LeanSTARK details July 7-9. EthMagicians thread at [topic 28723](https://ethereum-magicians.org/t/eip-frame-type-for-quantum-resistant-signature-and-stark-aggregation/28723) remains at 6 posts, with no new discussion after Jun 17.
-
-From vbuterin's PR description:
-
-> Adds a frame type for quantum-resistant Signature and STARK Aggregation. This supports signatures and STARKs (for privacy or for eg. L2s) in a post-quantum world in a highly gas-efficient way, by providing a way for transactions to declare them as "dependencies", in a way that allows the mempool and the block builder to replace them with a recursive STARK proving that they all exist.
-
-### PR #11968: Make EIP-8250 changes additive (draft since July 18)
-
-**Author**: soispoke
-
-- **Why**: restating the complete base payload and `charged_gas` formula can make EIP-8250 look like it replaces unrelated EIP-8141 changes.
-- **Proposed change**: define only the nonce-field replacement and additive gas/floor terms, leaving every other base field and rule inherited.
-- **Status**: Draft; author approvals are satisfied, but the gas-formula wording predates merged PR #11969 and now needs reconciliation.
-
-### PR #11970: Make EIP-8272 changes additive (open since July 18)
-
-**Author**: soispoke
-
-- **Why**: EIP-8272's full payload and gas-formula restatement risks replacing newer base-spec fields and costs.
-- **Proposed change**: specify only insertion of `recent_root_references` and its additive data, intrinsic, floor, and activation rules.
-- **Status**: Ready for review; author approvals are satisfied.
-
-### PR #12007: Define transaction replacement and payer exposure (open since July 23)
-
-**Author**: svlachakis
-
-- **Why**: one payer may underwrite many senders, so nodes need deterministic replacement and bounded local escrow exposure.
-- **Proposed change**: replacement identity `(sender, nonce)`, fee-bump rules, per-payer exposure reservation, payer revalidation, and a defined eviction order.
-- **Status**: AnkushinDaniil approved; awaiting an EIP-8141 author review.
-
-### PR #12008: Define transaction-level logs (open since July 23)
-
-**Author**: svlachakis
-
-- **Why**: the EIP defines frame receipts but not the canonical transaction log list.
-- **Proposed change**: concatenate logs from successful frames in execution order; discard logs from reverted frames and unrolled batches.
-- **Status**: AnkushinDaniil approved. The branch currently needs rebasing.
-
-### PR #12011: Formalize the protocol signature-scheme registry (open since July 24)
-
-**Author**: AnkushinDaniil
-
-- **Why**: future fixed-cost schemes need a governed path into the outer signature list without consuming the `ARBITRARY` escape hatch.
-- **Proposed change**: reserve scheme IDs `0x03` through `0xff` for protocol-defined verifiers, pin signer derivation and upgrade rules, and account for future aggregation.
-- **Status**: svlachakis approved; review remains open.
-
-### PR #12012: Implement the canonical paymaster (draft since July 24)
-
-**Author**: svlachakis
-
-- **Why**: the current EIP recognizes a canonical-paymaster runtime but does not fully specify its storage, signer rotation, or withdrawal lifecycle.
-- **Proposed change**: define the reference implementation, signer at signature index `1`, delayed signer rotation and withdrawals, and a per-fork pinned code hash.
-- **Status**: Draft with no reviewer approvals yet.
-
----
+- **[#11772](https://github.com/ethereum/EIPs/pull/11772), EIP-8288 PQ/STARK aggregation** (vbuterin, Thomas Coratger): open with recursive-proof and admitted-set completeness questions.
+- **[#12039](https://github.com/ethereum/EIPs/pull/12039), EIP-8250 keyed concurrency** (soispoke): permits distinct nonzero nonce keys to have concurrent pending transactions; approved but unmerged.
+- **[#12047](https://github.com/ethereum/EIPs/pull/12047), EIP-7819 trailing data** (shemnon): adds immutable delegation data and an ML-DSA/EIP-8141 validation example.
+- **[#12075](https://github.com/ethereum/EIPs/pull/12075), EIP-8361 Transaction Validity Proofs** (Marchhill): mempool-layer STARK proofs for validation prefixes; editor review and CI cleanup remain.
+- **[#12077](https://github.com/ethereum/EIPs/pull/12077), EIP-7793 TXINDEX** (Marchhill): uses a frame guard for paid positional enforcement; `TXINDEX` remains banned in validation.
+- **[#12110](https://github.com/ethereum/EIPs/pull/12110), EIP-8369 VOPS Profiles** (soispoke): distinguishes mempool and FOCIL checks; claimed-index transport is an activation prerequisite.
+- **[#12131](https://github.com/ethereum/EIPs/pull/12131), EIP-8272 recent-root runtime** (AnkushinDaniil): moves bytecode toward geas/sys-asm and synthetic deployment; the `0xb5` collision remains unresolved.
+- **[#12139](https://github.com/ethereum/EIPs/pull/12139), EIP-8077 frame source/nonce** (nerolation): clarifies composition with EIP-8141 and EIP-8250; awaiting author review.
 
 ## Rejected/Closed PRs
 
@@ -1011,3 +1017,31 @@ From vbuterin's PR description:
 
 - Proposed recognizing a canonical paymaster through stable identity and deployment rules.
 - Closed after review found its EIP-7702 recognition model unsound. The useful pinned-code-hash piece continues in draft PR #12012.
+
+### PRs #12011 and #12012: Registry and paymaster drafts (closed July 29-30)
+
+- **#12011**: closed after lightclient rejected an explicit protocol signature registry; new fixed-cost schemes should arrive through their own specifications.
+- **#12012**: closed when the canonical paymaster implementation moved to assembled-runtime PR #12041.
+
+### PRs #12086 and #12091: Inclusion checks (closed August 6 and 14)
+
+- **#12086**: frame-aware FOCIL validity was superseded by the profile-based EIP-8369 in PR #12110 after review found the unpaid per-list validation work unbounded.
+- **#12091**: block inclusion gating and payer solvency became redundant after PR #12062 specified exact two-dimensional block reservations.
+
+### PRs #11482, #11555, #11580, and #11681: Precompile, guarantor, and bundled extensions (closed August 14)
+
+- **#11482, #11555, #11681**: lightclient closed the stale branches and invited rebased proposals if the authors want to continue them.
+- **#11580**: closed because the complexity of payer-before-sender approval was no longer justified.
+
+### PR #12155: Batch approval duplicate (closed August 16)
+
+- Superseded by merged PR #12109, which landed the same static no-approval rule for every batch frame.
+
+### PRs #12161 and #12168: Wallet-specific admission rules (closed August 13-14)
+
+- **#12161**: canonical passkey-wallet recognition overlapped earlier rejected P256-account directions; the general admission work continues in #12160 and #12162.
+- **#12168**: signer-code restrictions were left to wallet validation rather than protocol-level `SIGPARAM` rules.
+
+### PRs #12175 and #12176: Paymaster service and gas-estimation RPC drafts (closed August 17)
+
+- Both unsolicited drafts closed within an hour without review. Neither is part of the current EIP or tooling surface.

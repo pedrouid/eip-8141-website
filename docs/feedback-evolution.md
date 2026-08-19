@@ -679,7 +679,7 @@ No change: the absorb-into-base amendment remains idle while the compose-by-requ
 
 **What to watch into Phase 22**: whether #11837 and #11814 merge, and which carries the signatures fix; whether EIP-8288 clears editorial review and merges; whether trebor's Example 3 clarification lands; whether the next Hegotá update promotes any AA-stack EIP to PFI; whether ERC-8286 advances past its CI failures toward editor review; and whether a fifth sibling EIP appears.
 
-## Phase 22: Signature Fix Lands and EIP-8288 Hits Proof-Security Review (Jul 1 - Jul 9)
+## Phase 22: Signature Fix Lands and EIP-8288 Hits Proof-Security Review (Jul 1 – Jul 9)
 
 *The Phase 21 signatures-list regression is resolved in the spec through three July merges. The active uncertainty moves from "how do custom verifiers sign the canonical hash" to "how does the still-open PQ/STARK sibling prove recursive soundness." EIP-8130 also continues its finalization run, now under authenticator terminology.*
 
@@ -850,3 +850,97 @@ New drafts move attention to payer exposure and replacement, transaction-log agg
 The final review resolves how the calldata floor, EIP-3529 refunds, blob fees, payer escrow, and receipts compose. Corrections during review fixed refund ordering and overflow checks; lightclient's final rewrite makes payer refunds explicit while retaining gross frame receipts.
 
 **What to watch into Phase 25**: whether #12007, #12008, #12011, or #12012 gathers author consensus; whether additive sibling PRs #11968 and #11970 merge; and whether the base spec's new settlement rules expose further client mismatches.
+
+---
+
+## Phase 25: Mempool Lifecycle and Inclusion Profiles (Jul 28 – Aug 11)
+
+*Work shifts from transaction settlement to predictable relay, client interoperability, and FOCIL eligibility. Small normative fixes accumulate while sibling and ERC documents become implementation-ready.*
+
+### ERC-8286 Becomes the First Merged 8141-Dependent ERC (External)
+
+*chiranjeev13 — ERC PR #1794, merged Jul 28*
+
+Editor approval moves the ERC-7579 modular-account validation flow from a draft signal to a merged application-layer standard. This is the first concrete downstream adoption contract for EIP-8141 rather than another core-protocol extension.
+
+### Replacement, Exposure, and Logs Land (Merged)
+
+*svlachakis — PRs #12007 and #12008, merged Jul 28*
+
+PR #12007 closes the sponsor-exposure gap by making replacement and payer reservations explicit; AnkushinDaniil and lightclient approved the policy without turning it into consensus validity. PR #12008 makes logs deterministic across clients, especially when batches unroll.
+
+### Sibling Deltas Become Additive (Merged)
+
+*soispoke — PRs #11968 and #11970, merged Jul 29*
+
+EIP-8250 and EIP-8272 stop restating the full base envelope. Review favors compose-by-requires deltas so later EIP-8141 fields and settlement changes are inherited instead of accidentally overwritten.
+
+### Signature Copy Order and Paymaster Packaging Converge
+
+*Marchhill, svlachakis — PRs #12041-#12042, Jul 30*
+
+PR #12042 aligns the copy operand order with existing EVM copy opcodes for client consistency. The canonical paymaster work moves from the closed Solidity draft #12012 into assembled reference bytecode in open PR #12041.
+
+### Validity Proofs and FOCIL Profiles Open (Sibling)
+
+*Marchhill, soispoke — PRs #12075 and #12110, opened Aug 3 and Aug 5*
+
+Draft EIP-8361 proposes proving validation-prefix validity outside consensus, while draft EIP-8369 defines bounded FOCIL eligibility profiles. ethrex review forced EIP-8369 to distinguish public-mempool and inclusion-list storage rules and to make claimed-index transport an activation prerequisite.
+
+### EIP-8130 Tightens Its Account Model (External)
+
+*chunter-cb — PR #12135, merged Aug 11*
+
+The principal alternative aligns with the Keystore contract, adds a transaction validity window, and trims the spec. Its trajectory remains constrained authenticator execution rather than EIP-8141's general EVM validation.
+
+### SLOTNUM Is Removed From Validation (Merged)
+
+*AnkushinDaniil — PR #12066, merged Aug 11*
+
+EIP-8272 made slot identity operationally important, exposing `SLOTNUM` as a simulation-to-inclusion dependency. The one-line ban prevents validation code from changing behavior as the slot advances.
+
+**What to watch into Phase 26**: whether the state-gas rewrite settles, how the FOCIL profile transports claimed indices, and whether the recent-root runtime and canonical paymaster receive author review.
+
+---
+
+## Phase 26: Two-Dimensional Gas and Static Safety (Aug 13 – Aug 20)
+
+*A major gas-model merge makes state growth explicit per frame. Follow-up review then removes rollback-sensitive approval paths, pins access warmth, and separates dynamic signature copying into its own opcode.*
+
+### Signature Padding Exposes a Payer-Grief Question (External)
+
+*brettf — Magicians post #167, Aug 13*
+
+Because empty-message raw signature bytes are elided from the signed hash but still billed to the payer, a sender can pad an `ARBITRARY` witness after authorization. Account code can enforce the length through `SIGPARAM`, but the thread leaves open whether the protocol should commit to length or impose a hard bound.
+
+### Explicit State Gas Lands (Merged)
+
+*lightclient — PR #12062, submitted Jul 31, merged Aug 13*
+
+The spec adopts separate execution and state budgets because frames may belong to mutually distrusting parties and builders need exact two-dimensional reservations. jochem-brouwer challenged journal introspection and rogue-contract exhaustion; the final design keeps pools frame-isolated and lets cross-frame refills reduce only the frame that originally paid. Helkomine's per-frame-cap question was resolved by retaining a transaction-wide execution cap alongside per-frame budgets. This is the broadest structural merge since April's mode/flags rewrite.
+
+### Atomic Batches Lose Approval Scope (Merged)
+
+*Marchhill — PR #12109, submitted Aug 5, merged Aug 14*
+
+AnkushinDaniil showed that rolling back `payer`, nonce escrow, or `sender_approved` could turn an ordinary batch failure into late transaction invalidity. Review chose a static ban on all approval scope across every batch member, including the unflagged terminator, so the approval context cannot change inside a batch.
+
+### Initial Warm State Is Pinned (Merged)
+
+*Marchhill — PR #12113, submitted Aug 5, merged Aug 17*
+
+The missing initial access set caused client gas divergence. Review clarified that sender, coinbase, and precompiles start warm; targeting an address does not warm it; the payer warms when approval touches it; and storage keys start cold.
+
+### Signature Copy Gets a Static Stack Shape (Merged)
+
+*lightclient — PR #12187, submitted Aug 17, merged Aug 18*
+
+Dynamic stack arity made `SIGPARAM` awkward for interpreters and static tooling. `SIGDATACOPY` now owns raw `ARBITRARY` witness copying. The assigned `0xb5` value reopens an opcode collision with EIP-8272's `RECENTROOTREFLOAD`, which neither current draft resolves.
+
+### Deterministic Opcodes Return to Validation (Merged)
+
+*Marchhill — PR #12167, submitted Aug 14, merged Aug 18*
+
+Review removes `ORIGIN`, `TLOAD`, `TSTORE`, and `BLOBHASH` from the banned list because their values are fixed by the frame or signed payload. It also aligns the deploy-frame rules by allowing `SSTORE` only to the new sender's storage, resolving a direct contradiction between the trace rule and opcode list.
+
+**What to watch next**: resolution of the `0xb5` collision; review of expiry-as-mode PR #12198; whether EIP-8369 gains a claimed-index transport; and whether the canonical paymaster runtime lands.

@@ -81,7 +81,7 @@ An EOA at address A rebalances a Uniswap v4 liquidity position, paying for gas i
 
 ## What are the new opcodes?
 
-EIP-8141 introduces six new opcodes that give frame transactions their power:
+EIP-8141 introduces seven new opcodes that give frame transactions their power:
 
 | Opcode | Purpose |
 |---|---|
@@ -90,6 +90,7 @@ EIP-8141 introduces six new opcodes that give frame transactions their power:
 | `FRAMEDATALOAD` | Loads 32 bytes from the current frame's `data` field. How account code reads frame calldata. |
 | `FRAMEDATACOPY` | Copies frame data to memory. Bulk version of `FRAMEDATALOAD` for larger payloads. |
 | `FRAMEPARAM` | Reads frame-level metadata (mode, flags, resolved target). Enables frame code to introspect its own execution context. |
-| `SIGPARAM` | Reads signature-list metadata and copies `ARBITRARY` witness bytes for custom verifiers. |
+| `SIGPARAM` | Reads signature-list metadata and `ARBITRARY` witness length. |
+| `SIGDATACOPY` | Copies `ARBITRARY` witness bytes for custom verifiers. Its current `0xb5` assignment collides with EIP-8272. |
 
 `APPROVE` is the central innovation: it's how account code tells the protocol "I've verified this transaction, proceed." The other opcodes give frame code access to transaction, frame, and signature context it needs to make that decision.

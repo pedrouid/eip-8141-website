@@ -73,13 +73,13 @@ EIP-8215/HCA is another related proposal outside the transaction-format spectrum
 
 Both EIP-8141 and EIP-8130 are PQ-ready, through different mechanisms. EIP-8141 uses arbitrary account code plus `ARBITRARY` witnesses. EIP-8130 uses authenticator contracts added to a canonical set. The tradeoff is expressiveness vs. operational predictability: EIP-8141 can run any EVM logic, while EIP-8130 constrains validation to `authenticate(hash, data) -> actorId` for bounded cost.
 
-On key rotation: EIP-8130 has native onchain key rotation via `owner_config` changes, portable across chains. EIP-8141 delegates key management entirely to account code, with no protocol-level rotation mechanism. EIP-8223 offers key rotation for sponsored accounts via `authorize(newEOA)`.
+On key rotation: EIP-8130 has native onchain key rotation through Keystore-backed actor changes, portable across chains. EIP-8141 delegates key management entirely to account code, with no protocol-level rotation mechanism. EIP-8223 offers key rotation for sponsored accounts via `authorize(newEOA)`.
 
 ### Gas Sponsorship
 
 | Proposal | Sponsorship Model | Canonical Paymaster |
 |---|---|---|
-| **EIP-8141** | VERIFY frame authorizes payer. Canonical paymaster recognized by runtime code match. Non-canonical limited to 1 pending tx. A codeless sender uses signature index `0`; a payment-only codeless EOA sponsor uses index `1`. | Yes: protocol-blessed, mempool-validated |
+| **EIP-8141** | VERIFY frame authorizes payer. Canonical paymaster recognized by runtime code match. Non-canonical contract paymasters are limited to 1 pending tx; codeless EOA sponsors use balance-bounded aggregate exposure instead. | Yes: protocol-blessed, mempool-validated |
 | **EIP-8175** | Programmable `fee_auth` contract with `RETURNETH` escrow. Sponsor state persists even if main tx reverts. | No: fee_auth is per-sponsor |
 | **EIP-8130** | `payer` + `payer_auth` fields. Payer authenticated via same authenticator infrastructure as sender. | No: uses canonical authenticator set |
 | **EIP-8202** | `ROLE_PAYER` reserved but not yet defined. No sponsorship today. | No |
@@ -91,7 +91,7 @@ On key rotation: EIP-8130 has native onchain key rotation via `owner_config` cha
 
 | Proposal | Batching Model | Atomicity Control |
 |---|---|---|
-| **EIP-8141** | Multiple frames per tx. SENDER frames execute sequentially with per-frame gas. | Flags field bit 2 on consecutive DEFAULT/SENDER frames; VERIFY cannot participate in or terminate a batch (#11955/#11987) |
+| **EIP-8141** | Multiple frames per tx. SENDER frames execute sequentially with isolated execution/state budgets. | Flags field bit 2 on consecutive DEFAULT/SENDER frames; VERIFY and approval scope cannot participate (#11955/#11987/#12109) |
 | **EIP-8175** | Typed capabilities list (CALL, CREATE). Sequential execution. | All-or-nothing: if any capability reverts, remaining are skipped |
 | **EIP-8130** | Call phases (array of arrays). Completed phases persist if later phases revert. | Per-phase atomicity: calls within a phase are atomic |
 | **EIP-8202** | Single execution payload. No native batching. | N/A: one call per tx (multicall wrappers needed) |
@@ -105,19 +105,19 @@ On key rotation: EIP-8130 has native onchain key rotation via `owner_config` cha
 |---|---|---|
 | **EIP-8141** | Implement new tx type. Default code covers EOAs with no smart account needed. | No bundlers, no relayers. Public mempool. |
 | **EIP-8175** | Implement new tx type. Compose capabilities + signatures. | No bundlers. fee_auth contracts for sponsorship. |
-| **EIP-8130** | Implement new tx type. Register actors via Account Configuration Contract. | Authenticator contracts. Canonical-set coordination. |
+| **EIP-8130** | Implement new tx type. Register actors through the Keystore. | Authenticator contracts. Canonical-set coordination. |
 | **EIP-8202** | Implement new tx type. Existing secp256k1 EOAs keep their address. | Minimal: no new contracts. |
 | **EIP-XXXX** | Implement new tx type. P-256/WebAuthn create new addresses. | Minimal: no new contracts. |
 | **EIP-8223** | Implement new tx type. Payer calls `authorize(sender)` on registry. | Payer registry predeploy only. |
 | **EIP-8224** | Implement new tx type. User deposits into fee-note contract, generates ZK proof. | Fee-note contracts + proof generation tooling. |
 
-On EVM changes: EIP-8141 requires 6 new opcodes and a new frame execution model. EIP-8175 requires 4 new opcodes. EIP-8130 and all other proposals require zero EVM modifications, which simplifies client implementation and reduces the cross-client coordination burden. EIP-8130 achieves comparable programmability to EIP-8141 with a smaller protocol-change surface. EIP-8141's advantage is that default code gives EOAs AA features without smart account deployment or registration.
+On EVM changes: EIP-8141 requires 7 new opcodes and a new frame execution model. EIP-8175 requires 4 new opcodes. EIP-8130 and all other proposals require zero EVM modifications, which simplifies client implementation and reduces the cross-client coordination burden. EIP-8130 achieves comparable programmability to EIP-8141 with a smaller protocol-change surface. EIP-8141's advantage is that default code gives EOAs AA features without smart account deployment or registration.
 
 ### Mempool Strategy
 
 | Proposal | Validation Cost | Mempool Complexity |
 |---|---|---|
-| **EIP-8141** | EVM execution (capped at 100k gas); protocol-defined prefixes may be evaluated directly with equivalent results (#12001) | High for custom validation: validation prefix shapes, banned opcodes, canonical paymaster |
+| **EIP-8141** | EVM execution capped at 100k execution gas plus 500k declared state gas; protocol-defined prefixes may be evaluated directly | High for custom validation: validation prefix shapes, banned dependencies, canonical paymaster |
 | **EIP-8175** | Crypto sig verification + fee_auth EVM prelude | Medium: stateless sigs, but fee_auth simulation needed |
 | **EIP-8130** | STATICCALL to authenticator (or native impl) | Medium: canonical authenticator set, account lock optimization |
 | **EIP-8202** | ecrecover / P256VERIFY / Falcon-512 verify (deterministic) | Low: purely cryptographic, no EVM |
@@ -167,9 +167,11 @@ EIP-8141 defenders counter that the gas figure conflates ERC-4337 EntryPoint ove
 From the [Biconomy blog analysis](https://blog.biconomy.io/native-account-abstraction-state-of-art-and-pending-proposals-q1-26/):
 > "Base's position: 'We can heavily optimize this and build out performant mempool/block builder implementations,' something they can't do with EIP-8141's arbitrary validation frames."
 
-The EIP-8130 position: EIP-8141 loses on most operational metrics (higher gas cost for non-EOA validation, mempool tracing, no native key rotation, 6 new opcodes), while authenticator contracts deliver comparable programmability with native hot-path implementations, no tracing, and built-in account management.
+The EIP-8130 position: EIP-8141 loses on most operational metrics (higher gas cost for non-EOA validation, mempool tracing, no native key rotation, 7 new opcodes), while authenticator contracts deliver comparable programmability with native hot-path implementations, no tracing, and built-in account management.
 
 At [AllWalletDevs #40](https://ethereum-magicians.org/t/allwalletdevs-40-july-15-2026/28858) on Jul 15, EIP-8130 and ERC-8286 were presented side by side. The meeting summary records Chris Hunter saying Base plans to launch EIP-8130 in its September fork. A companion metadata layer also appeared as [ERC-8340](https://github.com/ethereum/ERCs/pull/1883), an open draft defining deterministic CBOR for EIP-8130's opaque `metadata` field. These are implementation and tooling signals, not changes to the core 8130 validation model.
+
+August sharpened both paths. EIP-8130's PRs #12135, #12148, and #12173 aligned the spec with the canonical Keystore, added transaction validity windows, reconciled audit behavior, and fixed actor-ID encoding. EIP-8141's PR #12062 added explicit execution/state budgets and exact two-dimensional block reservations. The comparison is now a Keystore plus canonical-authenticator system against a broader frame machine with materially richer gas and client semantics.
 
 EIP-8141 supporters counter that EIP-8130 can be built atop EIP-8141 (authenticators are a subset of what VERIFY frames can do) but not vice versa; that default code gives EOAs immediate AA without registration; and that VERIFY frames enable stateful and multi-step validation the pure authenticator interface cannot express. The tension is structural: constrained pure-function validation for performance, or general EVM validation for expressiveness.
 
@@ -195,7 +197,7 @@ Key practical splits:
 - **PQ readiness**: EIP-8141 and EIP-8130 are fully PQ-ready through programmable validation/authentication. EIP-8215/HCA addresses a different PQ gap: new account addresses that are not derived from exposed public keys. See [PQ Roadmap](/pq-roadmap).
 - **Mempool simplicity**: EIP-8130 and the envelope-only proposals avoid EVM tracing during validation. EIP-8141 requires it, bounded by the restrictive tier's rules.
 - **EOA support**: EIP-8141's default code gives codeless EOAs the cheapest path. Other proposals require smart accounts, new addresses for new schemes, or delegation.
-- **Key rotation**: EIP-8130 has it natively (onchain `owner_config`). EIP-8141 delegates to account code. EIP-8223 offers it for sponsored accounts.
+- **Key rotation**: EIP-8130 has it natively through Keystore-backed actor configuration. EIP-8141 delegates to account code. EIP-8223 offers it for sponsored accounts.
 - **Complementary stack**: EIP-8141 can compose with narrower primitives such as EIP-8223, EIP-8224, and EIP-8215/HCA rather than forcing every sponsorship, privacy, or PQ-address concern into the base transaction type.
 
 ---
